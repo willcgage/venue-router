@@ -1,0 +1,26 @@
+# Installed libraries (restore with: npm install)
+node_modules/
+
+# This venue's own setup. Copy venue.example.json to venue.json to start one by hand.
+venue.json
+
+# Saved by the running app: spaces, floor plan, Normal service, and the last snapshot
+spaces.json
+prefs.json
+auth.json
+floor.json
+floor-image.bin
+normal-service.json
+venue-snapshot.json
+venue-snapshot.html
+
+# Written by the install scripts on each computer
+config.json
+logs/
+
+# Editor and OS clutter
+.vscode/
+.claude/
+Thumbs.db
+.DS_Store
+*.log

@@ -1,0 +1,1035 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Venue Router Mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an app shell. A dark navigation rail on the left, a top bar with system health and the live/sandbox and role switches, and one work area. Overview answers "is everything right"; rooms, signal path, patch and devices hold the detail. */
+:root{
+  --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f5; --ink:#101828; --ink-2:#475467; --ink-3:#5d6b82; --line:#e1e5eb; --line-2:#c9d0da;
+  --brand:#2456d6; --brand-soft:#e6eeff; --on-brand:#ffffff;
+  --ok:#067647; --ok-soft:#e3f6ec; --warn:#a15c07; --warn-soft:#fdf1d3; --bad:#b42318; --bad-soft:#fde7e4; --sw:#5b3fb8; --sw-soft:#efeaff;
+  --side:#0f1a2c; --side-ink:#eef2f8; --side-muted:#9aa8bd; --side-active:#1e2e4a;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0b1019; --surface:#131a26; --surface-2:#1a2332; --ink:#eef1f6; --ink-2:#b6bfcd; --ink-3:#93a0b3; --line:#243044; --line-2:#34435c;
+  --brand:#7ea4ff; --brand-soft:#182849; --on-brand:#08132b;
+  --ok:#4fd292; --ok-soft:#0f2c20; --warn:#f7b84b; --warn-soft:#37290d; --bad:#fb7c72; --bad-soft:#3a1613; --sw:#bca6f7; --sw-soft:#261d45;
+  --side:#080c14; --side-ink:#eef2f8; --side-muted:#8b98ad; --side-active:#172238; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0b1019; --surface:#131a26; --surface-2:#1a2332; --ink:#eef1f6; --ink-2:#b6bfcd; --ink-3:#93a0b3; --line:#243044; --line-2:#34435c;
+  --brand:#7ea4ff; --brand-soft:#182849; --on-brand:#08132b;
+  --ok:#4fd292; --ok-soft:#0f2c20; --warn:#f7b84b; --warn-soft:#37290d; --bad:#fb7c72; --bad-soft:#3a1613; --sw:#bca6f7; --sw-soft:#261d45;
+  --side:#080c14; --side-ink:#eef2f8; --side-muted:#8b98ad; --side-active:#172238; color-scheme:dark }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+h1,h2,h3,p{margin:0}
+h1{font-size:20px;font-weight:600;letter-spacing:-0.01em;text-wrap:balance}
+h2{font-size:15px;font-weight:600}
+h3{font-size:13px;font-weight:600;color:var(--ink-2)}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.shell{display:flex;min-height:100%}
+.side{width:216px;flex:none;background:var(--side);color:var(--side-ink);display:flex;flex-direction:column;gap:4px;padding:16px 10px;padding-left:max(10px,env(safe-area-inset-left,0px))}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 14px;font-weight:600;font-size:15px}
+.brand .mark{width:26px;height:26px;border-radius:7px;background:var(--brand);display:grid;place-items:center;color:var(--on-brand)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;min-height:38px;padding:6px 10px;border:0;border-radius:var(--r);background:none;color:var(--side-muted);text-align:left;font-weight:500}
+.nav button:hover{color:var(--side-ink)}
+.nav button.on{background:var(--side-active);color:var(--side-ink)}
+.nav svg,.brand svg{width:16px;height:16px;flex:none}
+.sidefoot{margin-top:auto;padding:10px;font-size:12px;color:var(--side-muted)}
+.work{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--line);padding-right:max(24px,env(safe-area-inset-right,0px))}
+.top .ttl{flex:1;min-width:200px}
+.top .ttl p{color:var(--ink-3);font-size:13px}
+.topright{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.health{display:flex;flex-wrap:wrap;gap:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:500;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.pill.ok i{background:var(--ok)} .pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.bad i{background:var(--bad)}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:var(--r);padding:3px}
+.seg button{border:0;background:none;padding:5px 12px;border-radius:6px;font-weight:500;color:var(--ink-2);min-height:30px}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line-2)}
+main{padding:20px 24px 96px;display:flex;flex-direction:column;gap:16px;max-width:1240px;width:100%;padding-right:max(24px,env(safe-area-inset-right,0px))}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:6px 14px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface);font-weight:500}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
+.btn.lg{min-height:44px;padding:8px 18px;font-size:15px}
+.btn.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.linkbtn{border:0;background:none;padding:0;color:var(--brand);font-weight:500;text-decoration:underline;text-underline-offset:2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.hero{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:18px 20px;border-left:4px solid var(--ink-3);border-radius:4px 12px 12px 4px}
+.hero.ok{border-left-color:var(--ok)} .hero.warn{border-left-color:var(--warn)} .hero.info{border-left-color:var(--brand)}
+.hero .state{flex:1;min-width:240px}
+.hero .state p{color:var(--ink-2);margin-top:2px}
+.hero .big{font-size:18px;font-weight:600}
+.hero .acts{display:flex;flex-wrap:wrap;gap:8px}
+.drift{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink-2)}
+.drift b{color:var(--ink);font-weight:500}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.room{padding:16px;display:flex;flex-direction:column;gap:12px;text-align:left;cursor:pointer}
+.room:hover{border-color:var(--line-2)}
+.room .rh{display:flex;align-items:center;gap:8px}
+.room .rh h2{flex:1}
+.chip{display:inline-flex;align-items:center;padding:1px 8px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.sw{background:var(--sw-soft);color:var(--sw)} .chip.brand{background:var(--brand-soft);color:var(--brand)}
+.kv{display:flex;flex-direction:column;gap:6px;margin:0}
+.kv div{display:flex;gap:10px;justify-content:space-between;align-items:baseline}
+.kv dt{color:var(--ink-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv dd{margin:0;font-weight:500;text-align:right;min-width:0;overflow-wrap:anywhere}
+.kv dd small{display:block;font-weight:400;color:var(--ink-3);font-size:12px}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.panel{padding:16px}
+.panel>h2{margin-bottom:10px}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:13px}
+.log time{display:block;color:var(--ink-3);font-size:12px;font-variant-numeric:tabular-nums}
+.empty{color:var(--ink-3);font-size:13px}
+.crumb{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.crumb .presets{margin-left:auto}
+.rows{display:flex;flex-direction:column}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer;border-left:3px solid transparent}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--surface-2)}
+.row.sel{background:var(--brand-soft);border-left-color:var(--brand)}
+.row.over{outline:2px solid var(--brand);outline-offset:-2px}
+.row .nm{flex:1;min-width:150px}
+.row .nm b{display:block;font-weight:600}
+.row .nm small,.raw{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.row .now{flex:1;min-width:150px}
+.row .now b{display:block;font-weight:500}
+.row .now small{color:var(--ink-3);font-size:12px}
+.row .tags{display:flex;gap:6px;flex-wrap:wrap}
+.srcs{display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto}
+.src{display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);text-align:left;cursor:grab}
+.src:hover{border-color:var(--brand)}
+.src span{flex:1;min-width:0;font-weight:500}
+.src small{display:block;font-weight:400}
+input[type=search],input[type=text],input[type=password],select{min-height:36px;padding:6px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface);max-width:100%}
+.field{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.check{display:flex;align-items:center;gap:8px;color:var(--ink-2);font-size:13px}
+.check input{width:16px;height:16px}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
+.stage{flex:1;min-width:130px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);border-top:3px solid var(--ink-3)}
+.stage.rtr{border-top-color:var(--brand)} .stage.sw{border-top-color:var(--sw)} .stage.end{border-top-color:var(--ok);background:var(--surface-2)}
+.stage small{display:block;color:var(--ink-3);font-size:12px}
+.stage b{display:block;font-weight:600;overflow-wrap:anywhere}
+.chev{align-self:center;color:var(--ink-3);font-size:18px}
+.note{font-size:13px;color:var(--ink-2)}
+.flowline{stroke-dasharray:7 5}
+@keyframes flow{to{stroke-dashoffset:-12}}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;min-width:560px}
+th{text-align:left;font-weight:500;color:var(--ink-3);font-size:12px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover{background:var(--surface-2)}
+td.num{font-family:var(--mono);color:var(--ink-3);width:52px}
+.finds{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.plan{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.plan img{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none}
+.plan.blank{aspect-ratio:16/9;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:40px 40px}
+.plan.arr{cursor:crosshair}
+.pin{position:absolute;transform:translate(-50%,-50%);max-width:170px;padding:4px 10px;border:1px solid var(--line-2);border-left:4px solid var(--ink-3);border-radius:8px;background:var(--surface);color:var(--ink);text-align:left;line-height:1.25;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.pin b,.pin small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pin b{font-size:12px;font-weight:600}
+.pin small{font-size:11px;color:var(--ink-2)}
+.pin.ok{border-left-color:var(--ok)} .pin.warn{border-left-color:var(--warn);background:var(--warn-soft)} .pin.dev{border-left-color:var(--sw)} .pin.bad{border-left-color:var(--bad);background:var(--bad-soft)}
+.pin.sel{outline:2px solid var(--brand);outline-offset:1px;z-index:2}
+.plan.arr .pin{cursor:grab;touch-action:none}
+.simple .side,.simple .topright{display:none}
+.simple main{max-width:760px;margin:0 auto;gap:14px}
+.simple [data-act=trace]{display:none}
+.s-status{padding:22px 24px;border-radius:14px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--brand);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.s-status.ok{border-left-color:var(--ok)} .s-status.warn{border-left-color:var(--warn)} .s-status.bad{border-left-color:var(--bad)}
+.s-status div{flex:1;min-width:220px}
+.s-big{font-size:24px;font-weight:600;line-height:1.25;text-wrap:balance}
+.s-status p{color:var(--ink-2);font-size:15px;margin-top:4px}
+.s-list{display:flex;flex-direction:column;gap:10px}
+.s-tile,.s-row{display:flex;align-items:center;gap:14px;width:100%;min-height:72px;padding:14px 18px;border:1px solid var(--line);border-radius:14px;background:var(--surface);text-align:left}
+.s-tile:hover,.s-row:hover{border-color:var(--line-2)}
+.s-tile b,.s-row b{font-size:17px;font-weight:600;flex:1;min-width:0;overflow-wrap:anywhere}
+.s-tile span,.s-row span{font-size:15px;color:var(--ink-2);text-align:right;min-width:0;overflow-wrap:anywhere}
+.s-row span small{display:block;font-size:13px;color:var(--ink-3)}
+.s-row.sel{border-color:var(--brand);background:var(--brand-soft)}
+.s-row.static{cursor:default}
+.s-flag{flex:none;width:10px;height:10px;border-radius:50%;background:var(--warn)}
+.s-label{font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:-4px}
+.s-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.s-preset{min-height:64px;padding:10px 16px;font-size:17px;font-weight:600;border-radius:14px;border:1px solid var(--line-2);background:var(--surface)}
+.s-preset.on{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
+.s-choose{padding:16px;border:1px solid var(--brand);border-radius:14px;background:var(--surface);display:flex;flex-direction:column;gap:12px}
+.s-choose p{font-size:15px;font-weight:500}
+.s-srcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.s-src{min-height:52px;padding:8px 12px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);font-size:15px;font-weight:500}
+.s-src:hover{border-color:var(--brand)}
+.s-src.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+.s-foot{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:center;color:var(--ink-3);font-size:13px;margin-top:10px}
+.lbl{display:flex;align-items:center;gap:8px;color:var(--ink-2);font-size:13px}
+.chip.rec{background:var(--bad-soft);color:var(--bad)}
+.chip.rec::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--bad);margin-right:6px}
+.xbtn{border:0;background:none;color:inherit;padding:0;margin-left:6px;min-width:22px;min-height:22px;font-size:15px;line-height:1;border-radius:4px}
+.xbtn:hover{background:var(--line-2)}
+.tagx{padding:3px 4px 3px 10px;font-size:13px}
+.actionbar{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));pointer-events:none;z-index:20}
+.actionbar .in{pointer-events:auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;max-width:720px;padding:12px 16px;border-radius:12px;background:var(--ink);color:var(--bg);box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.actionbar .in span{flex:1;min-width:200px;font-weight:500}
+.actionbar .btn{background:transparent;border-color:color-mix(in srgb,var(--bg) 40%,transparent);color:var(--bg)}
+.actionbar .btn.primary{background:var(--bg);color:var(--ink);border-color:var(--bg)}
+@media (max-width:900px){
+  .shell{flex-direction:column}
+  .side{width:auto;flex-direction:row;align-items:center;gap:8px;padding:8px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px));overflow-x:auto}
+  .brand{padding:0 8px 0 0} .brand span{display:none}
+  .nav{flex-direction:row} .nav button{white-space:nowrap}
+  .sidefoot{display:none}
+  .top{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .cols{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:no-preference){ .row,.room,.src,.btn{transition:border-color .12s,background-color .12s} .flowline{animation:flow .7s linear infinite} }
+</style>
+
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><div class="mark"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 4h5l3 8h4M2 12h3M11 4h3"/></svg></div><span>Venue Router</span></div>
+    <nav class="nav" aria-label="Sections">
+      <button type="button" data-nav="overview"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 7l6-5 6 5v7H2z"/></svg>Overview</button>
+      <button type="button" data-nav="map"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1.5" y="3" width="4" height="3" rx="1"/><rect x="1.5" y="10" width="4" height="3" rx="1"/><rect x="10.5" y="6.5" width="4" height="3" rx="1"/><path d="M5.5 4.5c3 0 2 3.5 5 3.5M5.5 11.5c3 0 2-3.5 5-3.5"/></svg>System map</button>
+      <button type="button" data-nav="floor"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2.5h12v11H2zM2 8h5M9.5 2.5v4M9.5 9.5v4"/></svg>Floor plan</button>
+      <button type="button" data-nav="patch" data-eng><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>Full patch</button>
+      <button type="button" data-nav="devices"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="4" rx="1"/><rect x="2" y="9" width="12" height="4" rx="1"/></svg>Devices</button>
+      <button type="button" data-nav="spaces" data-eng><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><path d="M11.5 9.5v4M9.5 11.5h4"/></svg>Spaces</button>
+    </nav>
+    <div class="sidefoot" id="sidefoot"></div>
+  </aside>
+  <div class="work">
+    <header class="top">
+      <div class="ttl"><h1 id="title"></h1><p id="subtitle"></p></div>
+      <div class="topright">
+        <div class="health" id="health"></div>
+        <div class="seg" id="seg-mode" role="group" aria-label="Live or sandbox" hidden><button type="button" data-mode="live">Live</button><button type="button" data-mode="sandbox">Sandbox</button></div>
+        <label class="check" style="color:var(--ink)" for="space">Space<select id="space"></select></label>
+        <label class="check" id="nice-wrap" hidden><input type="checkbox" id="nice">Nice names</label>
+        <div class="seg" role="group" aria-label="Who is using this"><button type="button" data-role="volunteer">Volunteer</button><button type="button" data-role="engineer">Engineer</button></div>
+      </div>
+    </header>
+    <main id="main"></main>
+  </div>
+</div>
+<div class="actionbar" id="bar" hidden></div>
+
+<script id="snap" type="application/json">null</script>
+<script>
+(function(){
+var SNAP=JSON.parse(document.getElementById('snap').textContent);
+function $(id){return document.getElementById(id)}
+if(!SNAP){$('main').textContent='This copy of the page has no system in it. Start the server with "node server.js" and open the address it prints, or run capture.js to make an offline copy.';return}
+
+/* Venue setup comes from the server (venue.json and spaces.json), never from this file. */
+var TIE_OUT=0,TIE_IN=0;
+var GROUPS=[];
+var OUT_NAME={},SRC_NAME={},MIX={};
+var COMMON=[];
+
+var RT=SNAP.rtr,SW=SNAP.sw,ROOMS=[],PLACES={},LINKS=[],NORMAL=null,FLOOR={pins:{},hasImage:false,v:0};
+var LIVE=!!window.VENUE_LIVE,mode=LIVE?'live':'snap',conn=null,latest=null,lost=false;
+var role='volunteer',view='overview',roomId=null,pick=null,traced=0,showAll=false,allHops=false;
+var flowMode='live';
+function flowSeg(){return '<div class="seg" role="group" aria-label="What to follow"><button type="button" data-flow="live" class="'+(flowMode==='live'?'on':'')+'" aria-pressed="'+(flowMode==='live')+'">On now</button><button type="button" data-flow="plumbing" class="'+(flowMode==='plumbing'?'on':'')+'" aria-pressed="'+(flowMode==='plumbing')+'">Plumbing</button></div>'}
+function spaceChanged(g){return g.dests.some(function(d){var b=BASE.RR[d];return S.RR[d]!==b||(b<TIE_OUT&&S.SR[b]!==BASE.SR[b])})}
+function restoreSpace(g){g.dests.forEach(function(d){var b=BASE.RR[d];S.RR[d]=b;if(b<TIE_OUT)S.SR[b]=BASE.SR[b]})}
+var auth={pinSet:false,ok:false},pinAsk=false,pinErr='',pinSetErr='',es=null;
+var fetch=function(u,o){return window.fetch(u,o).then(function(r){if(r.status===401&&String(u).indexOf('auth')!==0)lockOut();return r})};
+function lockOut(){if(role!=='engineer'&&!auth.ok)return;auth.ok=false;role='volunteer';connectES();say(auth.pinSet?'Engineer view has locked. Enter the PIN to open it again.':'Engineer view can only be used on the computer running Venue Router until a PIN is set there.');render()}
+var space='all';try{space=localStorage.getItem('vr-space')||'all'}catch(e){}
+function spaceRoom(){return ROOMS.filter(function(r){return r.id===space})[0]}
+function scopedDests(){var g=grp(space);if(g)return g.dests.slice();if(space!=='all')return [];
+  if(role!=='volunteer')return allDests();var a=[];volGroups().forEach(function(x){a=a.concat(x.dests)});return a}
+var history=[],pending=null,toast=null,toastTimer=null,log=[],q='',pq='',named=true,errs={};
+var PREFS={hideRooms:[],hideFloor:false,hideGear:false};
+function setPrefs(p){PREFS={hideRooms:(p&&Array.isArray(p.hideRooms)?p.hideRooms:[]).slice(),hideFloor:!!(p&&p.hideFloor),hideGear:!!(p&&p.hideGear)}}
+var DECKS=[],CONVS=[],MONS=[];
+function liveStream(r){var s=r.live&&r.live.stream;if(!s)return null;var e=s.error?' (the switcher reports a problem)':'';
+  if(s.state==='streaming')return {text:'Streaming live'+(s.service?' to '+s.service:'')+(s.bitrate?', '+s.bitrate+' Mbps':'')+e,cls:'rec',on:true};
+  if(s.state==='connecting')return {text:'Connecting to '+(s.service||'the stream')+e,cls:'warn'};
+  if(s.state==='stopping')return {text:'Stopping the stream'+e,cls:'warn'};
+  return {text:'Not streaming'+(s.service?', set up for '+s.service:'')+e,cls:s.error?'warn':''}}
+function liveRec(r){var c=r.live&&r.live.rec;if(!c)return null;var e=c.error?' (the switcher reports a problem)':'';
+  if(c.state==='recording')return {text:'Recording'+e,cls:'rec',on:true};
+  if(c.state==='stopping')return {text:'Stopping the recording'+e,cls:'warn'};
+  return {text:(c.disk?'Not recording':'Not recording, no disk attached')+e,cls:c.error?'warn':''}}
+function liveChips(r){return [liveStream(r),liveRec(r)].filter(Boolean).map(function(x){return '<span class="chip '+x.cls+'">'+esc(x.text)+'</span>'}).join('')}
+function liveKv(r){var a=liveStream(r),b=liveRec(r);return (a?'<div><dt>Stream</dt><dd>'+esc(a.text)+'</dd></div>':'')+(b?'<div><dt>Recording</dt><dd>'+esc(b.text)+'</dd></div>':'')}
+function liveRows(r){return [['Stream',liveStream(r)],['Recording',liveRec(r)]].filter(function(x){return x[1]}).map(function(x){return '<div class="s-row static">'+(x[1].on?'<i class="s-flag" style="background:var(--bad)" aria-hidden="true"></i>':'')+'<b>'+x[0]+'</b><span>'+esc(x[1].text)+'</span></div>'}).join('')}
+function monName(m){return m.name||m.model||'Monitor'}
+function monInputIndex(m){var x=/(\d+)\s*$/.exec(m.input||'');return x?+x[1]-1:null}
+function monByFeed(o){for(var i=0;i<MONS.length;i++){var k=(MONS[i].feeds||[]).indexOf(o);if(k>=0)return {m:MONS[i],idx:k}}return null}
+function monState(o){
+  var f=monByFeed(o);if(!f)return null;var m=f.m,sel=monInputIndex(m);
+  if(m.up===false)return {text:monName(m)+' is not answering',cls:'warn',bad:true};
+  if(sel!==null&&sel!==f.idx)return {text:monName(m)+' is switched to '+m.input+', not this feed',cls:'warn',bad:true};
+  return {text:'On '+monName(m)+(m.border?', '+m.border.toLowerCase()+' border':''),cls:'ok',bad:false}}
+function monChip(o){var s=monState(o);return s?'<span class="chip '+s.cls+'">'+esc(s.text)+'</span>':''}
+function convByReturn(i){return CONVS.filter(function(c){return (c.returns||[]).indexOf(i)>=0})[0]}
+function convName(c){return c.name||c.model||'Converter'}
+function convWork(c){return c.inMode&&c.outMode?(c.inMode===c.outMode?c.inMode+', no conversion':c.inMode+' to '+c.outMode):'Format not reported'}
+function convState(c){
+  if(c.up===false)return {text:'Not answering',cls:'warn'};
+  if(c.pattern)return {text:'Test pattern on: '+c.pattern,cls:'warn'};
+  if(c.signal===false)return {text:'No signal on its input',cls:'rec'};
+  return {text:'Signal present',cls:'ok'}}
+function convFeed(c){var m=/(\d+)\s*$/.exec(c.src||''),n=m&&/^SDI/i.test(c.src)?+m[1]-1:null;return n!==null&&c.feeds&&c.feeds[n]!=null?c.feeds[n]:null}
+function deckByFeed(o){return DECKS.filter(function(k){return k.feed===o})[0]}
+function deckByReturn(i){return DECKS.filter(function(k){return (k.returns||[]).indexOf(i)>=0})[0]}
+function deckName(k){return k.name||k.model||'Recorder'}
+function deckState(k){
+  if(k.up===false)return {text:'Not answering',cls:'warn'};
+  if(k.status==='record')return {text:'Recording',cls:'rec'};
+  if(k.status==='play'||k.status==='jog'||k.status==='shuttle'||k.status==='forward'||k.status==='rewind')return {text:'Playing'+(k.clip?' clip '+k.clip:''),cls:'ok'};
+  return {text:'Not recording',cls:''}}
+function deckSpace(k){if(k.remainSec==null)return '';var hrs=k.remainSec/3600;return hrs>=1?Math.round(hrs)+' h of space left':Math.round(k.remainSec/60)+' min of space left'}
+function deckLine(k){var s=deckState(k),sp=deckSpace(k);return s.text+(sp&&k.up!==false?', '+sp:'')}
+function deckChip(o){var k=deckByFeed(o);if(!k)return '';var s=deckState(k);return '<span class="chip '+(s.cls==='rec'?'rec':s.cls)+'">'+esc(deckName(k))+': '+esc(deckLine(k))+'</span>'}
+function meta(snap){
+  var tz=snap.ties||{};TIE_IN=+tz.routerToSwitcher||0;TIE_OUT=+tz.switcherToRouter||0;
+  var nn=snap.names||{};OUT_NAME=nn.out||{};SRC_NAME=nn.src||{};MIX=nn.mix||{};
+  COMMON=Array.isArray(snap.common)&&snap.common.length?snap.common.slice():(function(){var a=[];((snap.rtr||{}).inL||[]).forEach(function(l,i){if(a.length<16&&i>=TIE_OUT&&!/^(RTR-IN-\d+|Input \d+)$/.test(l))a.push(i)});return a})();
+  DECKS=snap.decks||[];CONVS=snap.convs||[];MONS=snap.mons||[];if(typeof snap.pin==='boolean'){auth.pinSet=snap.pin;if(!snap.pin)auth.ok=false}ADDR=snap.addr||{};if(snap.prefs)setPrefs(snap.prefs);if(Array.isArray(snap.spaces))GROUPS=JSON.parse(JSON.stringify(snap.spaces));if(snap.floor)FLOOR={pins:snap.floor.pins||{},hasImage:!!snap.floor.hasImage,v:snap.floor.v||0};ROOMS=snap.rooms||[];LINKS=snap.links||[];PLACES={};var p=snap.places||{};Object.keys(p).forEach(function(k){PLACES[k]=p[k]});ROOMS.forEach(function(r){PLACES[r.id]=r.place});DECKS.forEach(function(k){PLACES[k.id]=k.place});CONVS.forEach(function(c){PLACES[c.id]=c.place});MONS.forEach(function(m){PLACES[m.id]=m.place})}
+meta(SNAP);
+if(!LIVE){try{var lsSp=JSON.parse(localStorage.getItem('vr-spaces')||'null');if(Array.isArray(lsSp))GROUPS=lsSp}catch(e){}}
+if(GROUPS[0]&&GROUPS[0].dests.length)traced=GROUPS[0].dests[0];
+if(!LIVE){try{var lsPf=JSON.parse(localStorage.getItem('vr-prefs')||'null');if(lsPf)setPrefs(lsPf)}catch(e){}}
+function savePrefs(){
+  if(LIVE)fetch('prefs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(PREFS)}).then(function(r){if(!r.ok)throw 0;say('Saved for everyone.')}).catch(function(){say('That could not be saved. Try again.','bad')});
+  else{try{localStorage.setItem('vr-prefs',JSON.stringify(PREFS))}catch(e){}say('Saved in this browser only, because this is a snapshot.')}}
+function volGroups(){return GROUPS.filter(function(g){return !g.hidden})}
+function volRooms(){return ROOMS.filter(function(r){return PREFS.hideRooms.indexOf(r.id)<0})}
+function volCanSee(i){
+  if(role==='engineer')return true;
+  if(i.kind==='screen'){var gg=groupOf(i.d);return !!gg&&!gg.hidden}
+  if(i.room)return PREFS.hideRooms.indexOf(i.room)<0;
+  return !PREFS.hideGear}
+function saveSpaces(quiet){
+  if(LIVE)fetch('spaces',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(GROUPS)}).then(function(r){if(!r.ok)throw 0;if(!quiet)say('Saved for everyone.')}).catch(function(){say('That could not be saved. Try again.','bad')});
+  else{try{localStorage.setItem('vr-spaces',JSON.stringify(GROUPS))}catch(e){}if(!quiet)say('Saved in this browser only, because this is a snapshot.')}}
+var BASE={RR:RT.route.slice(),SR:SW.route.slice()},S={RR:RT.route.slice(),SR:SW.route.slice()};
+
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function grp(id){return GROUPS.filter(function(g){return g.id===id})[0]}
+function groupOf(d){return GROUPS.filter(function(g){return g.dests.indexOf(d)>=0})[0]}
+function clean(l){return l.replace(/^\d+:\s*/,'').replace(/^RTR-(IN|OUT)-\d+\s+/,'').replace(/^SW (Out|IN) \d+ - /,'')}
+var NICE=false;
+function mixName(n){if(NICE)return MIX[n]||'ME '+n+' mix';var re=new RegExp('^ME '+n+' PGM');return SW.inL.filter(function(l){return re.test(l)})[0]||'ME '+n+' PGM'}
+function friendly(l){if(!NICE)return clean(l);if(SRC_NAME[l])return SRC_NAME[l];var c=clean(l);if(SRC_NAME[c])return SRC_NAME[c];var m=/^MV Out 0?(\d+)$/.exec(c);return m?'Multiview '+m[1]:c}
+function plainIn(l){return /^(RTR-IN-\d+|Input \d+)$/.test(l)}
+function plainOut(l){return /^(RTR-OUT-\d+|Output \d+|SW IN \d+)$/.test(l)}
+function outName(o){return (NICE&&OUT_NAME[o])||clean(RT.outL[o])}
+function inName(i){return friendly(RT.inL[i])}
+function refName(){return NORMAL?'Normal service':mode==='sandbox'?(role==='volunteer'?'how it was before you started practicing':'the hardware as it was when you opened the sandbox'):'the snapshot'}
+function canEdit(){return mode!=='live'}
+function time(d){return new Date(d).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit'})}
+
+function trace(o,plumb){
+  var hops=[],seen={},guard=0;
+  while(guard++<8){
+    if(seen[o]){hops.push({dev:'rtr',label:'Loop back to '+outName(o),port:'Router out '+(o+1)});break}
+    seen[o]=1;
+    var i=S.RR[o];
+    hops.push({dev:'rtr',label:clean(RT.outL[o]),port:'Router out '+(o+1)});
+    hops.push({dev:'rtr',label:clean(RT.inL[i]),port:'Router in '+(i+1)});
+    var dkr=deckByReturn(i);
+    if(dkr){hops.push({dev:dkr.id,label:deckName(dkr)+' playback',port:deckState(dkr).text,deck:dkr.id});break}
+    var cvr=convByReturn(i);
+    if(cvr){hops.push({dev:cvr.id,label:convName(cvr),port:convWork(cvr),conv:cvr.id});
+      var cf=convFeed(cvr);
+      if(cf===null){hops.push({dev:cvr.id,label:(cvr.src||'Its')+' input',port:'Not cabled through the router',internal:true});break}
+      o=cf;continue}
+    if(i>=TIE_OUT)break;
+    var j=S.SR[i];
+    hops.push({dev:'sw',label:SW.outL[i],port:'Switcher out '+(i+1)});
+    if(j>=1&&j<=TIE_IN){hops.push({dev:'sw',label:SW.inL[j],port:'Switcher in '+j});o=j-1;continue}
+    var mm=/^ME (\d) (PGM|PVW)/.exec(SW.inL[j]),me=mm&&SW.mix&&SW.mix.me[mm[1]-1];
+    if(plumb&&mm){hops.push({dev:'sw',label:SW.inL[j],port:'Switcher mix',me:+mm[1],internal:true,mixEnd:true});break}
+    if(!me){hops.push({dev:'sw',label:SW.inL[j],port:'Made in the switcher',internal:true});break}
+    var ms=mm[2]==='PGM'?me.pgm:me.pvw;
+    hops.push({dev:'sw',label:SW.inL[j],port:'Switcher mix',me:+mm[1]});
+    if(ms.id>=1&&ms.id<=TIE_IN){hops.push({dev:'sw',label:ms.name,port:'Switcher in '+ms.id});o=ms.id-1;continue}
+    hops.push({dev:'sw',label:ms.name,port:'Made in the switcher',internal:true});break;
+  }
+  return hops}
+function describe(o,plumb){
+  var h=trace(o,plumb),last=h[h.length-1],mh=h.filter(function(x){return x.me})[0],viaSw=h.some(function(x){return x.dev==='sw'});
+  if(mh)return {title:mixName(mh.me),sub:last.mixEnd?'A mix made in the switcher':'Now on '+friendly(last.label),key:'me'+mh.me,me:mh.me};
+  var ch=h.filter(function(x){return x.conv})[0];
+  return {title:friendly(last.label),sub:ch?'Through '+ch.label+', '+ch.port:viaSw?'Through the switcher':'',key:last.label}}
+function withState(st,fn){var k=S;S=st;try{return fn()}finally{S=k}}
+function drifted(d){return describe(d).key!==withState(BASE,function(){return describe(d).key})}
+function allDests(){var a=[];GROUPS.forEach(function(g){a=a.concat(g.dests)});return a}
+function driftList(){return scopedDests().filter(drifted)}
+function cur(e){return e[0]==='rtr'?S.RR[e[1]]:S.SR[e[1]]}
+function modeOf(g){for(var i=0;i<g.modes.length;i++){if(g.modes[i].set.every(function(e){return cur(e)===e[2]}))return i}return -1}
+function groupSet(g){var set=[];g.dests.forEach(function(d){set.push(['rtr',d,S.RR[d]]);if(S.RR[d]<TIE_OUT)set.push(['sw',S.RR[d],S.SR[S.RR[d]]])});return set}
+function isBase(){return JSON.stringify(S)===JSON.stringify(BASE)}
+function say(text,kind){toast={text:text,kind:kind||'info'};clearTimeout(toastTimer);toastTimer=setTimeout(function(){toast=null;renderBar()},4500);renderBar()}
+function addLog(text,kind){log.unshift({t:Date.now(),text:text,kind:kind});if(log.length>40)log.pop()}
+function commit(fn,text){history.push(JSON.stringify(S));if(history.length>30)history.shift();fn();pending=null;if(text)addLog(text,'sandbox');render()}
+function request(fn,ask,text,g){toast=null;if(g&&g.confirm){pending={fn:fn,text:ask,log:text};render()}else commit(fn,text)}
+function watchMsg(){return role==='volunteer'?'This is the live system, which can only be watched. Choose Practice changes at the bottom to try it out.':'Live view only watches the hardware. Switch to Sandbox to try a change.'}
+function routeDest(d,s){
+  if(!canEdit()){say(watchMsg());return}
+  if(RT.lock[d]){say(outName(d)+' is locked on the router, so it was left alone.','bad');return}
+  if(S.RR[d]===s){say(outName(d)+' is already showing '+inName(s)+'.');return}
+  request(function(){S.RR[d]=s},'Put '+inName(s)+' on '+outName(d)+'?',outName(d)+' set to '+inName(s),groupOf(d))}
+function applySet(g,set,name){
+  if(!canEdit()){say(watchMsg());return}
+  var change=set.filter(function(e){return cur(e)!==e[2]&&!(e[0]==='rtr'&&RT.lock[e[1]])});
+  if(!change.length){say(g.name+' is already set to '+name+'.');return}
+  request(function(){change.forEach(function(e){if(e[0]==='rtr')S.RR[e[1]]=e[2];else S.SR[e[1]]=e[2]})},'Switch '+g.name+' to '+name+'?',g.name+' switched to '+name,g)}
+
+function load(snap){
+  var old=LIVE&&latest?{RR:RT.route,SR:SW.route,mix:SW.mix,rooms:ROOMS}:null;
+  meta(snap);SNAP=snap;RT=snap.rtr;SW=snap.sw;conn=snap.conn||null;NORMAL=snap.normal||null;
+  if(old){
+    RT.route.forEach(function(v,o){if(old.RR[o]!==v&&!plainOut(RT.outL[o]))addLog(outName(o)+' changed from '+friendly(RT.inL[old.RR[o]])+' to '+friendly(RT.inL[v]),'live')});
+    SW.route.forEach(function(v,o){if(old.SR[o]!==v&&o<TIE_OUT)addLog('Switcher output '+SW.outL[o]+' changed from '+SW.inL[old.SR[o]]+' to '+SW.inL[v],'live')});
+    ROOMS.forEach(function(r){var o2=(old.rooms||[]).filter(function(x){return x.id===r.id})[0];if(!o2)return;
+      var a1=liveStream(o2),a2=liveStream(r),b1=liveRec(o2),b2=liveRec(r);
+      if(a1&&a2&&o2.live.stream.state!==r.live.stream.state)addLog(r.place+': '+a2.text,'live');
+      if(b1&&b2&&o2.live.rec.state!==r.live.rec.state)addLog(r.place+': '+b2.text,'live')});
+    if(old.mix&&SW.mix)SW.mix.me.forEach(function(m,i){var p=old.mix.me[i];if(p&&p.pgm.id!==m.pgm.id)addLog(mixName(i+1)+' cut from '+p.pgm.name+' to '+m.pgm.name,'live')})}
+  BASE=NORMAL?{RR:NORMAL.RR.slice(),SR:NORMAL.SR.slice()}:{RR:RT.route.slice(),SR:SW.route.slice()};
+  S={RR:RT.route.slice(),SR:SW.route.slice()};history=[];pending=null}
+
+function findings(){
+  var f=[];
+  RT.outL.forEach(function(l,o){if(!plainOut(l)&&plainIn(RT.inL[S.RR[o]]))f.push({o:o,t:clean(l)+' (router out '+(o+1)+') is fed by an unnamed input, '+RT.inL[S.RR[o]]+'.'})});
+  for(var o=0;o<TIE_IN;o++){var a=clean(RT.outL[o]),b=SW.inL[o+1];if(plainOut(RT.outL[o])||/^Input \d+$/.test(b))continue;
+    var na=a.toLowerCase().replace(/[^a-z0-9]/g,''),nb=b.toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(na.slice(0,3)!==nb.slice(0,3))f.push({o:o,t:'Router out '+(o+1)+' is named "'+a+'" but the switcher input it feeds is named "'+b+'".'})}
+  RT.inL.forEach(function(l,i){if(/not working/i.test(l))f.push({t:'Router in '+(i+1)+' is labelled "'+l+'".'})});
+  MONS.forEach(function(m){if(m.up===false)f.push({t:monName(m)+' is not answering.'});else{var sel=monInputIndex(m);if(sel!==null&&(m.feeds||[]).length&&m.feeds[sel]==null)f.push({t:monName(m)+' is switched to '+m.input+', which is not cabled from the router.'})}});
+  CONVS.forEach(function(c){if(c.up===false)f.push({t:convName(c)+' is not answering.'});else if(c.pattern)f.push({t:convName(c)+' has a test pattern on ('+c.pattern+').'});else if(c.signal===false)f.push({t:convName(c)+' has no signal on its '+(c.src||'')+' input.'})});
+  return f}
+function roomTrace(r,o){
+  var hops=[{dev:r.id,label:r.outL[o],port:'Switcher output'}],i=r.route[o],n=0;
+  while(n++<3){var idx=r.outL.indexOf(r.inL[i]);if(idx<0||idx===o)break;hops.push({dev:r.id,label:r.inL[i],port:'Inside the switcher'});i=r.route[idx]}
+  var link=LINKS.filter(function(l){return l.room===r.id&&l.input===i})[0];
+  hops.push({dev:r.id,label:r.inL[i],port:link?'Switcher input '+i:'Switcher source'});
+  return link?hops.concat(trace(link.rtrOut)):hops}
+
+/* ---------- shell ---------- */
+function renderShell(){
+  var g=view==='room'?grp(roomId):null,r=view==='room'&&!g?ROOMS.filter(function(x){return x.id===roomId})[0]:null;
+  var titles={overview:['Overview','Is everything showing what it should?'],map:['System map','Every screen, and where its picture comes from. Select one to follow its path.'],floor:['Floor plan','Where each screen is in the building, and what it is showing.'],path:['Signal path','Follow a picture from its source to a screen.'],patch:['Full patch','Every router output and what feeds it.'],devices:['Devices','Add, find and place the routers and switchers the app watches.'],spaces:['Spaces','Name the rooms and choose which screens belong to each.']};
+  var t=view==='room'?[g?g.name:r?r.place:'Room',g?'Tap a screen, then choose what it should show.':'This room has its own switcher. Watch only.']:titles[view];
+  if(space!=='all'&&!grp(space)&&!spaceRoom())space='all';
+  var sp=$('space'),sig=GROUPS.map(function(x){return x.id}).concat(ROOMS.map(function(x){return x.id})).join(',');
+  if(sp.dataset.sig!==sig){sp.dataset.sig=sig;sp.innerHTML='<option value="all">All spaces</option>'+GROUPS.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>'}).join('')+ROOMS.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.place)+'</option>'}).join('')}
+  sp.value=space;
+  if(view==='overview'&&space!=='all'){var sg=grp(space);t=[sg?sg.name:spaceRoom().place,sg?'Tap a screen, then choose what it should show.':'This room has its own switcher. Watch only.']}
+  if(role==='volunteer'&&view==='overview')t=space==='all'?['Venue Router','What every screen is showing right now.']:[t[0],grp(space)?'Tap a screen to change what it shows.':t[1]];
+  $('title').textContent=t[0];$('subtitle').textContent=t[1];
+  document.querySelectorAll('[data-nav]').forEach(function(b){b.className=(b.dataset.nav===view||(view==='room'&&b.dataset.nav==='overview'))?'on':'';b.hidden=b.hasAttribute('data-eng')&&role!=='engineer'});
+  document.querySelectorAll('[data-role]').forEach(function(b){b.className=b.dataset.role===role?'on':'';b.setAttribute('aria-pressed',b.dataset.role===role)});
+  $('seg-mode').hidden=!LIVE;$('nice-wrap').hidden=role!=='engineer'||!(Object.keys(OUT_NAME).length||Object.keys(SRC_NAME).length||Object.keys(MIX).length);$('nice').checked=NICE;
+  document.querySelectorAll('[data-mode]').forEach(function(b){b.className=b.dataset.mode===mode?'on':'';b.setAttribute('aria-pressed',b.dataset.mode===mode)});
+  var h='';
+  if(!LIVE)h='<span class="pill"><i></i>Snapshot from '+new Date(SNAP.taken).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})+'</span>';
+  else if(lost)h='<span class="pill bad"><i></i>Server not answering</span>';
+  else{var c=conn||{};h=pill('Router',c.rtr)+pill('Switcher',c.sw&&c.mix);ROOMS.forEach(function(x){h+=pill(x.place,x.up!==false)})}
+  $('health').innerHTML=h;
+  $('sidefoot').textContent=LIVE?(mode==='live'?'Live, watch only. Nothing here can change the hardware.':'Sandbox. Changes are pretend and are discarded when you return to Live.'):'Snapshot. Changes are pretend.'}
+function pill(n,ok){return '<span class="pill '+(ok?'ok':'bad')+'"><i></i>'+esc(n)+(ok?'':' offline')+'</span>'}
+function renderBar(){
+  var b=$('bar');
+  if(pending){b.hidden=false;b.innerHTML='<div class="in" role="alertdialog" aria-label="Confirm change"><span>'+esc(pending.text)+'</span><button type="button" class="btn" data-act="no">Cancel</button><button type="button" class="btn primary" data-act="yes">'+esc(pending.yes||'Change it')+'</button></div>'}
+  else if(toast){b.hidden=false;b.innerHTML='<div class="in" role="status"><span>'+esc(toast.text)+'</span><button type="button" class="btn" data-act="dismiss">Dismiss</button></div>'}
+  else{b.hidden=true;b.innerHTML=''}}
+
+/* ---------- overview ---------- */
+function presetsHtml(g,big){var m=modeOf(g),h='';g.modes.forEach(function(x,i){h+='<button type="button" class="btn'+(big?' lg':'')+(m===i?' on':'')+'" data-act="mode" data-g="'+g.id+'" data-i="'+i+'" aria-pressed="'+(m===i)+'">'+esc(x.name)+'</button>'});return h}
+function renderOverview(){
+  var d=driftList(),h='',cls,big,sub;
+  if(NORMAL){if(d.length){cls='warn';big=d.length+(d.length===1?' screen differs':' screens differ')+' from Normal service';sub='Check the list below. If it is not on purpose, set it back.'}else{cls='ok';big='Everything matches Normal service';sub='Every screen is showing what it should.'}}
+  else if(d.length){cls='warn';big=d.length+(d.length===1?' screen has':' screens have')+' been changed';sub='Compared with '+refName()+'.'}
+  else{cls='info';big=LIVE?'No Normal service has been saved yet':'Showing the system as it was captured';sub=LIVE?'Save it once during a service. After that, this page says whenever a screen drifts.':'This is a snapshot. Try changes freely, nothing reaches the hardware.'}
+  h+='<section class="card hero '+cls+'"><div class="state"><div class="big">'+esc(big)+'</div><p>'+esc(sub)+'</p>';
+  if(d.length){h+='<ul class="drift">';d.slice(0,6).forEach(function(x){h+='<li><b>'+esc(outName(x))+'</b> is showing '+esc(describe(x).title)+', not '+esc(withState(BASE,function(){return describe(x).title}))+'</li>'});if(d.length>6)h+='<li>and '+(d.length-6)+' more</li>';h+='</ul>'}
+  h+='</div><div class="acts">';
+  var sgr=grp(space);
+  if(canEdit()&&(space==='all'?!isBase():sgr&&spaceChanged(sgr)))h+='<button type="button" class="btn primary lg" data-act="restore">'+(sgr?(NORMAL?'Restore '+esc(sgr.name):'Put '+esc(sgr.name)+' back'):(NORMAL?'Restore Normal service':'Put everything back'))+'</button>';
+  if(canEdit()&&history.length)h+='<button type="button" class="btn lg" data-act="undo">Undo</button>';
+  if(LIVE&&mode==='live'&&role==='engineer')h+='<button type="button" class="btn lg" data-act="save-normal">'+(NORMAL?'Update Normal service':'Save as Normal service')+'</button>';
+  h+='</div></section>';
+  if(space!=='all'){$('main').innerHTML=h+roomHtml(space,false);return}
+  h+='<div class="cols"><div class="grid">';
+  if(!GROUPS.length&&!ROOMS.length)h+='<article class="card room" style="cursor:default"><h2>No spaces yet</h2><p class="empty">Add rooms and their screens under Spaces in the menu.</p></article>';
+  GROUPS.forEach(function(g){var dn=g.dests.filter(drifted).length;
+    h+='<article class="card room" data-room="'+g.id+'" tabindex="0" role="button" aria-label="Open '+esc(g.name)+'"><div class="rh"><h2>'+esc(g.name)+'</h2>'+(dn?'<span class="chip warn">'+dn+' changed</span>':'<span class="chip">'+g.dests.length+' screens</span>')+'</div><dl class="kv">';
+    g.dests.slice(0,4).forEach(function(x){var s=describe(x);h+='<div><dt>'+esc(outName(x))+'</dt><dd>'+esc(s.title)+(s.me?'<small>'+esc(s.sub)+'</small>':'')+'</dd></div>'});
+    h+='</dl>'+(g.dests.length>4?'<span class="empty">and '+(g.dests.length-4)+' more</span>':'')+(g.modes.length?'<div class="presets">'+presetsHtml(g)+'</div>':'')+'</article>'});
+  ROOMS.forEach(function(r){
+    h+='<article class="card room" data-room="'+r.id+'" tabindex="0" role="button" aria-label="Open '+esc(r.place)+'"><div class="rh"><h2>'+esc(r.place)+'</h2><span class="chip sw">Own switcher</span></div><dl class="kv">';
+    var pi=r.outL.indexOf('Program');if(pi>=0){var ph=roomTrace(r,pi);h+='<div><dt>On its program</dt><dd>'+esc(ph[ph.length-1].label)+'</dd></div>'}
+    LINKS.filter(function(l){return l.room===r.id}).forEach(function(l){var s=describe(l.rtrOut);h+='<div><dt>Building feed</dt><dd>'+esc(s.title)+(s.me?'<small>'+esc(s.sub)+'</small>':'')+'</dd></div>'});
+    h+=liveKv(r)+'</dl></article>'});
+  h+='</div><aside class="card panel"><h2>Recent changes</h2>';
+  if(log.length){h+='<ul class="log">';log.slice(0,12).forEach(function(e){h+='<li><time>'+time(e.t)+(e.kind==='sandbox'?' · sandbox':'')+'</time>'+esc(e.text)+'</li>'});h+='</ul>'}
+  else h+='<p class="empty">'+(LIVE?'Changes on the hardware appear here as they happen.':'Changes you try here are listed as you make them.')+'</p>';
+  h+='</aside></div>';
+  $('main').innerHTML=h}
+
+/* ---------- engineer PIN ---------- */
+function renderPin(){
+  $('main').innerHTML='<section class="s-status"><div><div class="s-big">Enter the Engineer PIN</div><p>Engineer view changes the setup for everyone, so it is locked.</p></div></section>'+
+    '<form id="pin-form" class="s-choose" autocomplete="off"><label for="pin-in" style="font-weight:500">PIN</label><input type="password" id="pin-in" inputmode="numeric" maxlength="8" autocomplete="off" aria-describedby="pin-msg" style="font-size:22px;letter-spacing:.3em;max-width:220px;min-height:52px">'+
+    '<p id="pin-msg" role="alert" style="color:var(--bad);font-size:14px;font-weight:400;min-height:1.4em">'+esc(pinErr)+'</p>'+
+    '<div class="field"><button type="submit" class="btn primary lg">Unlock</button><button type="button" class="btn lg" data-act="pin-cancel">Cancel</button></div></form>'}
+document.addEventListener('submit',function(e){if(e.target.id!=='pin-form')return;e.preventDefault();
+  var v=$('pin-in').value;if(!v){pinErr='Enter the PIN first.';render();$('pin-in').focus();return}
+  fetch('auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:v})}).then(function(r){
+    if(r.ok){auth.ok=true;pinAsk=false;pinErr='';role='engineer';connectES();render();return}
+    return r.text().then(function(t){pinErr=t||'That PIN is not right.';render();$('pin-in').focus()})}).catch(function(){pinErr='The server did not answer. Try again.';render()})});
+
+/* ---------- volunteer view ---------- */
+function renderSimple(){
+  var g=grp(space),rm=g?null:spaceRoom(),d=driftList(),h='',cls,big,sub;
+  var down=LIVE&&(lost||(conn&&(!conn.rtr||!conn.sw||!conn.mix)));
+  if(down){cls='bad';big='Some equipment is not answering';sub='Tell the tech lead. What you see here may be out of date.'}
+  else if(d.length){cls='warn';big=d.length===1?'1 screen is different':d.length+' screens are different';sub=NORMAL?'They are not showing what they normally do. They are marked below.':'They have been changed here. They are marked below.'}
+  else if(NORMAL){cls='ok';big='Everything looks right';sub='Every screen is showing what it normally does.'}
+  else{cls='';big=g?'Here is what these screens are showing':'Here is what every screen is showing';sub=LIVE?'Nothing can be marked as wrong yet, because a normal setup has not been saved.':'This is a saved snapshot, not the live system.'}
+  h+='<section class="s-status '+cls+'"><div><div class="s-big">'+esc(big)+'</div><p>'+esc(sub)+'</p></div>';
+  if(canEdit()&&(space==='all'?!isBase():g&&spaceChanged(g)))h+='<button type="button" class="btn primary lg" data-act="restore">Put it back</button>';
+  h+='</section>';
+  if(space==='all'){
+    h+='<div class="s-list">';
+    volGroups().forEach(function(x){var n=x.dests.filter(drifted).length,titles={};x.dests.forEach(function(q){titles[describe(q).title]=1});var tk=Object.keys(titles);
+      h+='<button type="button" class="s-tile" data-space-go="'+x.id+'">'+(n?'<i class="s-flag" aria-hidden="true"></i>':'')+'<b>'+esc(x.name)+'</b><span>'+(n?n+(n===1?' screen is':' screens are')+' different':tk.length===1?'All showing '+esc(tk[0]):x.dests.length+' screens')+'</span></button>'});
+    volRooms().forEach(function(r){h+='<button type="button" class="s-tile" data-space-go="'+esc(r.id)+'"><b>'+esc(r.place)+'</b><span>'+(r.up===false?'Not answering':liveStream(r)?esc(liveStream(r).text):'Has its own switcher')+'</span></button>'});
+    if(!volGroups().length&&!volRooms().length)h+='<div class="s-row static"><b>No spaces yet</b><span>An engineer can add them under Spaces.</span></div>';
+    if(!PREFS.hideFloor&&Object.keys(FLOOR.pins).length)h+='<button type="button" class="s-tile" data-nav="floor"><b>Floor plan</b><span>See where each screen is</span></button>';
+    h+='</div>'}
+  else{
+    h+='<div><button type="button" class="btn lg" data-space-go="all">All spaces</button></div>';
+    if(g){
+      if(g.modes.length){var m=modeOf(g);h+='<div class="s-label">Quick settings</div><div class="s-presets">';
+        g.modes.forEach(function(x,i){h+='<button type="button" class="s-preset'+(m===i?' on':'')+'" data-act="mode" data-g="'+g.id+'" data-i="'+i+'" aria-pressed="'+(m===i)+'">'+esc(x.name)+'</button>'});h+='</div>'}
+      h+='<div class="s-label">Screens</div><div class="s-list">';
+      g.dests.forEach(function(q){var s=describe(q),lk=RT.lock[q];
+        h+='<button type="button" class="s-row'+(pick===q?' sel':'')+'" data-dest="'+q+'" aria-expanded="'+(pick===q)+'">'+(drifted(q)?'<i class="s-flag" aria-hidden="true"></i>':'')+'<b>'+esc(outName(q))+'</b><span>'+esc(s.title)+(s.me?'<small>'+esc(s.sub)+'</small>':lk?'<small>Locked</small>':'')+(deckByFeed(q)?'<small style="color:'+(deckState(deckByFeed(q)).cls==='rec'?'var(--bad)':'var(--ink-2)')+';font-weight:500">'+esc(deckLine(deckByFeed(q)))+'</small>':'')+(monState(q)&&monState(q).bad?'<small style="color:var(--warn);font-weight:500">'+esc(monState(q).text)+'</small>':'')+'</span></button>';
+        if(pick===q){
+          h+='<div class="s-choose"><p>'+(lk?esc(outName(q))+' is locked and cannot be changed here.':'Choose what '+esc(outName(q))+' should show')+'</p>';
+          if(!lk){h+='<div class="s-srcs">';COMMON.forEach(function(i){h+='<button type="button" class="s-src'+(S.RR[q]===i?' on':'')+'" data-src="'+i+'">'+esc(inName(i))+'</button>'});h+='</div>'}
+          h+='</div>'}});
+      h+='</div>'}
+    else if(rm){
+      LINKS.filter(function(l){return l.room===rm.id}).forEach(function(l){var s=describe(l.rtrOut);
+        h+='<div class="s-label">Coming from the main system</div><div class="s-list"><div class="s-row static"><b>Building feed</b><span>'+esc(s.title)+(s.me?'<small>'+esc(s.sub)+'</small>':'')+'</span></div></div>'});
+      if(liveStream(rm)||liveRec(rm))h+='<div class="s-label">Streaming and recording</div><div class="s-list">'+liveRows(rm)+'</div>';
+      h+='<div class="s-label">This room\'s switcher</div><div class="s-list">';
+      rm.outL.forEach(function(l,o){var hops=roomTrace(rm,o);h+='<div class="s-row static"><b>'+esc(l)+'</b><span>'+esc(hops[hops.length-1].label)+'</span></div>'});
+      h+='</div>'}}
+  h+='<div class="s-foot">';
+  if(LIVE)h+='<span>'+(mode==='live'?'Watching the live system. Nothing here can change it.':'Practice mode. Changes are pretend.')+'</span><button type="button" class="btn" data-mode="'+(mode==='live'?'sandbox':'live')+'">'+(mode==='live'?'Practice changes':'Back to live')+'</button>';
+  else h+='<span>Snapshot. Changes are pretend.</span>';
+  h+='<button type="button" class="btn" data-role="engineer">Engineer view</button></div>';
+  $('main').innerHTML=h}
+
+/* ---------- room ---------- */
+function srcListHtml(){
+  var needle=q.trim().toLowerCase(),list=[],h='';
+  if(needle&&(showAll||role==='engineer'))RT.inL.forEach(function(l,i){if((l+' '+friendly(l)).toLowerCase().indexOf(needle)>=0)list.push(i)});else list=COMMON;
+  list.slice(0,60).forEach(function(i){var on=pick!==null&&S.RR[pick]===i;
+    h+='<button type="button" class="src" draggable="true" data-src="'+i+'"><span>'+esc(inName(i))+(role==='engineer'?'<small class="raw">Router in '+(i+1)+' · '+esc(RT.inL[i])+'</small>':'')+'</span>'+(on?'<span class="chip brand" style="flex:none">Showing now</span>':'')+'</button>'});
+  return h||'<p class="empty">No source matches that.</p>'}
+function roomHtml(id,back){
+  var g=grp(id),h='<div class="crumb">'+(back?'<button type="button" class="btn" data-nav="overview">Back to overview</button>':'');
+  if(!g){var r=ROOMS.filter(function(x){return x.id===id})[0];if(!r)return '';
+    h+='<span class="chip sw">'+esc(r.model||'Switcher')+'</span></div>';
+    if(r.up===false)h+='<div class="card panel" style="border-color:var(--bad)">This switcher is not answering. Showing its last known state.</div>';
+    LINKS.filter(function(l){return l.room===r.id}).forEach(function(l){var s=describe(l.rtrOut);
+      h+='<section class="card hero info"><div class="state"><div class="big">Building feed: '+esc(s.title)+(s.me?', '+esc(s.sub.charAt(0).toLowerCase()+s.sub.slice(1)):'')+'</div><p>It leaves the '+esc(PLACES.rtr||'router')+' on router output '+(l.rtrOut+1)+'. '+(l.input==null?'Which input on this switcher it lands on is not recorded yet.':'It lands on input '+l.input+' ('+esc(r.inL[l.input])+').')+'</p></div><div class="acts"><button type="button" class="btn" data-act="trace" data-d="'+l.rtrOut+'">Follow the feed</button></div></section>'});
+    if(liveStream(r)||liveRec(r))h+='<section class="card panel"><h2>Streaming and recording</h2><div class="field">'+liveChips(r)+'</div></section>';
+    h+='<section class="card"><div class="rows">';
+    r.outL.forEach(function(l,o){var hops=roomTrace(r,o),mid=hops.slice(1,-1).filter(function(x){return x.dev===r.id}).map(function(x){return x.label});
+      h+='<div class="row" style="cursor:default"><div class="nm"><b>'+esc(l)+'</b></div><div class="now"><b>'+esc(hops[hops.length-1].label)+'</b>'+(mid.length?'<small>Through '+esc(mid.join(', then '))+'</small>':'')+'</div></div>'});
+    h+='</div></section>';return h}
+  h+=(g.modes.length?'<div class="presets">'+presetsHtml(g,true)+'</div>':'')+'</div><div class="cols"><section class="card"><div class="rows">';
+  g.dests.forEach(function(d){var s=describe(d);
+    h+='<div class="row'+(pick===d?' sel':'')+'" data-dest="'+d+'" tabindex="0" role="button" aria-pressed="'+(pick===d)+'"><div class="nm"><b>'+esc(outName(d))+'</b>'+(role==='engineer'?'<small>Router out '+(d+1)+' · '+esc(RT.outL[d])+'</small>':'')+'</div><div class="now"><b>'+esc(s.title)+'</b>'+(s.sub?'<small>'+esc(s.sub)+'</small>':'')+'</div><div class="tags">'+(drifted(d)?'<span class="chip warn">Changed</span>':'')+(RT.lock[d]?'<span class="chip">Locked</span>':'')+deckChip(d)+monChip(d)+'<button type="button" class="linkbtn" data-act="trace" data-d="'+d+'">Signal path</button></div></div>'});
+  h+='</div></section><aside class="card panel">';
+  if(pick===null)h+='<h2>Change what a screen shows</h2><p class="empty">Select a screen on the left, then choose a source here. You can also drag a source onto a screen.</p>';
+  else h+='<h2>Choose a source for '+esc(outName(pick))+'</h2>';
+  if(role==='engineer'||showAll)h+='<div class="field" style="margin:10px 0"><input type="search" id="src-search" placeholder="Camera 3" aria-label="Find a source" value="'+esc(q)+'" style="flex:1"></div>';
+  h+='<div class="srcs" id="srcs" style="margin-top:10px">'+srcListHtml()+'</div>';
+  if(role!=='engineer'&&!showAll)h+='<p style="margin-top:10px"><button type="button" class="linkbtn" data-act="showall">Search all sources</button></p>';
+  if(role==='engineer'){
+    h+='<hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><h3 style="margin-bottom:8px">Room settings</h3><label class="check"><input type="checkbox" id="ask-'+g.id+'" data-ask="'+g.id+'"'+(g.confirm?' checked':'')+'>Ask before changing these screens</label>';
+    if(modeOf(g)<0)h+='<div class="field" style="margin-top:10px"><input type="text" id="name-'+g.id+'" placeholder="Wedding" aria-label="Name for this setup" style="flex:1;min-width:120px"><button type="button" class="btn" data-act="save-preset" data-g="'+g.id+'">Save as preset</button></div>'+(errs[g.id]?'<p style="color:var(--bad);font-size:13px;margin-top:4px">'+esc(errs[g.id])+'</p>':'')}
+  h+='</aside></div>';
+  return h}
+function renderRoom(){var h=roomHtml(roomId,true);if(!h){view='overview';renderOverview();return}$('main').innerHTML=h}
+
+/* ---------- signal path ---------- */
+function stages(o,plumb){
+  var hops=trace(o,plumb),last=hops[hops.length-1],st=[],prev=null;
+  hops.forEach(function(x){var mix=x.me?mixName(x.me):null;
+    if(prev&&prev.dev===x.dev){if(mix)prev.sub=mix;return}
+    prev={dev:x.dev,title:x.dev==='rtr'?'Router':'Switcher',sub:mix||(x.dev==='sw'?'Passes straight through':''),place:PLACES[x.dev]||''};st.push(prev)});
+  st.reverse();
+  return [{dev:'end',kind:'Source',title:friendly(last.label),sub:last.internal?'Made in the switcher':''}].concat(st.map(function(x){return {dev:x.dev,kind:x.place||'Core',title:x.title,sub:x.sub}})).concat([{dev:'end',kind:'Screen',title:outName(o),sub:''}])}
+function pathPorts(d,pl){
+  var hops=trace(d,pl),rp=PLACES.rtr?PLACES.rtr+' · ':'',sp=PLACES.sw?PLACES.sw+' · ':'',r={screen:rp+hops[0].port,src:null,mid:null,chip1:null,chip2:null};
+  if(hops[2]&&hops[2].conv){r.chip2=hops[1].port;r.mid=hops[2].port;if(hops[3]&&hops[3].dev==='rtr'&&hops[4]){r.chip1=hops[3].port;if(hops.length===5)r.src=rp+hops[4].port}return r}
+  if(!hops[2]||hops[2].dev!=='sw'){r.src=rp+hops[1].port;return r}
+  r.chip2=hops[1].port;
+  var swOut=hops[2].port.replace('Switcher ',''),swIn=null,i=3;
+  while(hops[i]&&hops[i].dev==='sw'){if(/^Switcher in/.test(hops[i].port))swIn=hops[i].port.replace('Switcher ','');i++}
+  var ms=(swIn?swIn+' → ':'')+swOut;r.mid=ms.charAt(0).toUpperCase()+ms.slice(1)+(PLACES.sw?' · '+PLACES.sw:'');
+  if(hops[i]){r.chip1=hops[i].port;if(hops[i+1])r.src=rp+hops[i+1].port}
+  else{var last=hops[hops.length-1];if(last.internal&&!last.mixEnd)r.src=sp+'Made in the switcher'}
+  return r}
+function pathNotes(d){
+  var pl=flowMode==='plumbing',hops=trace(d,pl),mh=hops.filter(function(x){return x.me})[0],h='';
+  if(pl&&mh)h+='<p class="note" style="margin-top:10px">This is the plumbing only. Which source '+esc(mixName(mh.me))+' is cut to changes during a service, so it is left out. Choose On now to follow it.</p>';
+  if(mh&&SW.mix&&!pl){var keys=SW.mix.me[mh.me-1].keys.filter(function(k){return k.onAir}).map(function(k){return 'key '+k.n+' ('+k.fill.name+')'}),dsk=SW.mix.dsk.filter(function(k){return k.onAir}).map(function(k){return 'DSK '+k.n+(k.fill?' ('+k.fill.name+')':'')});
+    h+='<p class="note" style="margin-top:10px">'+esc(keys.length?'Graphics layered on this mix: '+keys.join(', ')+'.':'No upstream keys are on air on this mix.')+' '+esc(dsk.length?'Downstream keys on air on the switcher: '+dsk.join(', ')+'.':'')+'</p>'}
+  hops.filter(function(x){return x.conv}).forEach(function(x){var c=CONVS.filter(function(y){return y.id===x.conv})[0];if(!c)return;var s=convState(c);
+    h+='<p class="note" style="margin-top:10px">Passes through '+esc(convName(c))+': '+esc(convWork(c))+'. <span class="chip '+s.cls+'">'+esc(s.text)+'</span></p>'});
+  h+='<p class="note" style="margin-top:10px">The highlighted route below shows every port on the way. If the screen looks wrong, start at the source and follow the arrows. The first point that looks wrong is where the problem is.</p>';
+  return h}
+function showPath(d){
+  traced=d;mapSel='d'+d;mapQ='';
+  if(scopedDests().indexOf(d)>=0){if(mapScope!=='all')mapScope='rooms'}
+  else{mapScope='all';if(plainOut(RT.outL[d]))mapNamed=false}
+  go('map')}
+
+/* ---------- system map ---------- */
+var mapSel=null,mapScope='rooms',mapUnused=false,mapNamed=true,mapQ='';
+function cut(s,n){return s.length>n?s.slice(0,n-1)+'…':s}
+function mapDevice(sc){
+  if(sc==='rtr')return {name:'Router',inL:RT.inL,outL:RT.outL,route:S.RR,base:BASE.RR,lock:RT.lock,inNo:function(i){return i+1},inLabel:function(i){return clean(RT.inL[i])},outLabel:function(o){return clean(RT.outL[o])},rtr:true};
+  if(sc==='sw')return {name:'Switcher',inL:SW.inL,outL:SW.outL,route:S.SR,base:BASE.SR,inNo:function(i){return i},inLabel:function(i){return SW.inL[i]},outLabel:function(o){return SW.outL[o]}};
+  var r=ROOMS.filter(function(x){return x.id===sc})[0];
+  return r?{name:r.place+' switcher',inL:r.inL,outL:r.outL,route:r.route,inNo:function(i){return i},inLabel:function(i){return r.inL[i]},outLabel:function(o){return r.outL[o]}}:null}
+var mapShowRtr=true,mapShowSw=true,mapPaths='all';
+function mapModel(){
+  var rows=[],extra=[],nodes={},needle=mapQ.trim().toLowerCase(),dev=null,used={},pl=flowMode==='plumbing';
+  var eff=mapScope,only=null;
+  if(eff==='rooms'&&space!=='all'){if(grp(space))only=space;else eff=space}
+  if(eff!=='rooms'&&eff!=='all'){dev=mapDevice(eff);if(!dev)eff='rooms'}
+  var cols=dev?['src']:['src'].concat(mapShowRtr?['r1']:[],mapShowSw?['sw']:[],mapShowRtr?['r2']:[]);
+  if(!dev){
+    var list=[];
+    if(eff==='rooms')GROUPS.forEach(function(g){if(only&&g.id!==only)return;g.dests.forEach(function(d){list.push([d,g.name])})});
+    else RT.outL.forEach(function(l,o){if(!mapNamed||!plainOut(l))list.push([o,'Router outputs'])});
+    list.forEach(function(x){
+      var d=x[0],hops=trace(d,pl),last=hops[hops.length-1],mh=hops.filter(function(h){return h.me})[0],viaSw=!!(hops[2]&&hops[2].dev==='sw'),c={src:null,r1:null,sw:null,r2:null};
+      if((mapPaths==='sw'&&!viaSw)||(mapPaths==='direct'&&viaSw))return;
+      c.r2={key:'r2:'+hops[1].port,label:hops[1].port};
+      if(hops[2]&&hops[2].conv){c.sw={key:'conv:'+hops[2].conv,label:hops[2].label+' converter'};if(hops[3]&&hops[3].dev==='rtr'&&hops[4])c.r1={key:'r1:'+hops[4].port+'>'+hops[3].port,label:hops[4].port+' → '+hops[3].port.replace('Router ','')}}
+      if(viaSw){
+        if(mh)c.sw={key:'mix'+mh.me,label:mixName(mh.me)};else if(last.internal)c.sw={key:'int:'+last.label,label:last.label};else c.sw={key:'aux:'+hops[2].label,label:hops[2].label+' output'};
+        var i=3;while(hops[i]&&hops[i].dev==='sw')i++;
+        if(hops[i]&&hops[i+1])c.r1={key:'r1:'+hops[i+1].port+'>'+hops[i].port,label:hops[i+1].port+' → '+hops[i].port.replace('Router ','')}}
+      if(!(last.internal&&(!mh||last.mixEnd)))c.src={key:'src:'+last.label,label:friendly(last.label)+(last.internal?' (in switcher)':'')};
+      if(c.src)used[c.src.key]=1;
+      rows.push({key:'d'+d,label:(eff==='all'?(d+1)+' · ':'')+outName(d),g:x[1],c:c,drift:drifted(d),lock:RT.lock[d],d:d})});
+    if(mapUnused)RT.inL.forEach(function(l,i){var k='src:'+clean(l);if(i<TIE_OUT||used[k]||(mapNamed&&plainIn(l)))return;used[k]=1;extra.push({key:k,col:'src',label:friendly(l),unused:true})})}
+  else{
+    dev.outL.forEach(function(l,o){
+      if(dev.rtr&&mapNamed&&plainOut(l))return;
+      var i=dev.route[o];used['in'+i]=1;
+      rows.push({key:'out'+o,label:(o+1)+' · '+dev.outLabel(o),g:dev.name+' outputs',c:{src:{key:'in'+i,label:dev.inNo(i)+' · '+dev.inLabel(i)}},drift:dev.base?dev.base[o]!==i:false,lock:dev.lock?dev.lock[o]:false,d:dev.rtr?o:undefined})});
+    if(mapUnused)dev.inL.forEach(function(l,i){if(used['in'+i]||(dev.rtr&&mapNamed&&plainIn(l)))return;extra.push({key:'in'+i,col:'src',label:dev.inNo(i)+' · '+dev.inLabel(i),unused:true})})}
+  if(needle){
+    rows=rows.filter(function(r){return (r.label+' '+Object.keys(r.c).map(function(k){return r.c[k]?r.c[k].label:''}).join(' ')).toLowerCase().indexOf(needle)>=0});
+    extra=extra.filter(function(n){return n.label.toLowerCase().indexOf(needle)>=0})}
+  var tall={},chips=null,selRow=dev?null:rows.filter(function(r){return r.key===mapSel})[0];
+  if(selRow){var pp=pathPorts(selRow.d,pl);selRow.sub=pp.screen;
+    if(selRow.c.sw&&pp.mid)tall[selRow.c.sw.key]=pp.mid;
+    if(!mapShowRtr){chips=pp;if(selRow.c.src&&pp.src)tall[selRow.c.src.key]=pp.src}}
+  var y=34,lastG=null;
+  rows.forEach(function(r){
+    if(r.g!==lastG){y+=(lastG===null?0:8)+24;r.head={g:r.g,y:y};lastG=r.g}
+    y+=30;r.y=y;r.k={};r.keys=[];
+    cols.forEach(function(col){var c=r.c[col];if(!c)return;var n=nodes[c.key]||(nodes[c.key]={key:c.key,col:col,label:c.label,ys:[],sub:tall[c.key]});n.ys.push(y);r.k[col]=c.key;r.keys.push(c.key)});
+    if(r.sub)y+=16});
+  var H=y+24;
+  cols.forEach(function(col){
+    var list=Object.keys(nodes).map(function(k){return nodes[k]}).filter(function(n){return n.col===col});
+    list.forEach(function(n){n.avg=n.ys.reduce(function(a,b){return a+b},0)/n.ys.length});
+    list.sort(function(a,b){return a.avg-b.avg});
+    var prev=28,pt=false;list.forEach(function(n){n.y=Math.round(Math.max(n.avg,prev+(pt?46:30)));prev=n.y;pt=!!n.sub});
+    if(col==='src')extra.forEach(function(n){n.ys=[];n.y=prev+(pt?46:30);pt=false;prev=n.y;nodes[n.key]=n});
+    if(pt)prev+=16;
+    if(prev+24>H)H=prev+24});
+  return {screens:rows,nodes:nodes,H:H,dev:dev,chips:chips,cols:cols}}
+function renderMap(){
+  var m=mapModel(),W=1200,WD=176,X={},hot={},h='',nc=m.cols.length+1,XS=W-WD;
+  m.cols.forEach(function(c,i){X[c]=Math.round(i*(W-WD)/(nc-1))});
+  if(mapSel&&!m.nodes[mapSel]&&!m.screens.some(function(s){return s.key===mapSel}))mapSel=null;
+  var any=!!mapSel,lit=m.screens.filter(function(s){return mapSel&&(s.key===mapSel||s.keys.indexOf(mapSel)>=0)});
+  if(mapSel)hot[mapSel]=1;
+  lit.forEach(function(s){hot[s.key]=1;s.keys.forEach(function(k){hot[k]=1})});
+  var edges=[],shared={};
+  m.screens.forEach(function(s){var on=!!hot[s.key],isSel=m.chips&&s.key===mapSel;
+    s.keys.forEach(function(k,i){var a=m.nodes[k],nk=s.keys[i+1];
+      if(!nk){edges.push({x1:X[a.col]+WD,y1:a.y,x2:XS,y2:s.y,on:on,warn:s.drift,k:s.key,chip:isSel?m.chips.chip2:null});return}
+      var b=m.nodes[nk],id=k+'|'+nk;
+      if(!shared[id]){shared[id]={x1:X[a.col]+WD,y1:a.y,x2:X[b.col],y2:b.y,on:false,warn:false,k:nk};edges.push(shared[id])}
+      if(on)shared[id].on=true;
+      if(isSel&&a.col==='src'&&b.col==='sw')shared[id].chip=m.chips.chip1})});
+  edges.sort(function(a,b){return (a.on?1:0)-(b.on?1:0)});
+  var titles={src:m.dev?(mapUnused?'Inputs':'Inputs in use'):(mapUnused?'Sources':'Sources in use'),r1:'Router',sw:CONVS.length?'Switcher or converter':'Switcher',r2:'Router'};
+  var svg='<defs><marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--brand)"/></marker></defs>';
+  m.cols.forEach(function(c){svg+='<text x="'+X[c]+'" y="14" font-size="13" font-weight="600" fill="var(--ink-2)">'+titles[c]+'</text>'});
+  svg+='<text x="'+XS+'" y="14" font-size="13" font-weight="600" fill="var(--ink-2)">'+(m.dev?'Outputs':mapScope==='all'?'Router outputs':'Screens')+'</text>';
+  edges.forEach(function(e){var mx=(e.x1+e.x2)/2,x2=e.on?e.x2-3:e.x2,d='M'+e.x1+' '+e.y1+' C'+mx+' '+e.y1+' '+mx+' '+e.y2+' '+x2+' '+e.y2;
+    svg+='<path d="'+d+'" fill="none" '+(e.on?'class="flowline" marker-end="url(#flow-arrow)" ':'')+'stroke="'+(e.on?'var(--brand)':e.warn?'var(--warn)':'var(--line-2)')+'" stroke-width="'+(e.on?2.5:e.warn?2:1.25)+'" opacity="'+(any&&!e.on?0.25:1)+'"/><path d="'+d+'" fill="none" stroke="transparent" stroke-width="14" data-map="'+esc(e.k)+'" style="cursor:pointer"/>'});
+  edges.forEach(function(e){if(!e.chip)return;var cx=(e.x1+e.x2)/2,cy=(e.y1+e.y2)/2,w=Math.round(e.chip.length*6.6+18);
+    svg+='<rect x="'+(cx-w/2)+'" y="'+(cy-10)+'" width="'+w+'" height="20" rx="10" fill="var(--surface)" stroke="var(--brand)"/><text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-size="11.5" fill="var(--ink)">'+esc(e.chip)+'</text>'});
+  function box(key,x,y,label,kind,dot,sub){var on=!!hot[key],sel=mapSel===key;
+    return '<g data-map="'+esc(key)+'" tabindex="0" role="button" aria-label="'+esc(label)+'" style="cursor:pointer" opacity="'+(any&&!on?0.4:1)+'"><rect x="'+x+'" y="'+(y-12)+'" width="'+WD+'" height="'+(sub?40:24)+'" rx="6" fill="'+(kind==='sw'?'var(--sw-soft)':kind==='rtr'?'var(--brand-soft)':kind==='warn'?'var(--warn-soft)':kind==='unused'?'var(--surface-2)':'var(--surface)')+'" stroke="'+(sel||on?'var(--brand)':kind==='sw'?'var(--sw)':kind==='warn'?'var(--warn)':'var(--line-2)')+'" stroke-width="'+(sel?2.5:on?2:1)+'"'+(kind==='unused'&&!sel?' stroke-dasharray="3 3"':'')+'/><text x="'+(x+9)+'" y="'+(y+4.5)+'" font-size="13" fill="'+(kind==='unused'?'var(--ink-3)':'var(--ink)')+'">'+esc(cut(label,dot?20:23))+'</text>'+(sub?'<text x="'+(x+9)+'" y="'+(y+21)+'" font-size="11" fill="var(--ink-2)">'+esc(cut(sub,29))+'</text>':'')+(dot?'<circle cx="'+(x+WD-12)+'" cy="'+y+'" r="4" fill="'+dot+'"/>':'')+'</g>'}
+  Object.keys(m.nodes).forEach(function(k){var n=m.nodes[k];svg+=box(k,X[n.col],n.y,n.label,n.unused?'unused':n.col==='sw'?'sw':n.col==='src'?'':'rtr','',n.sub)});
+  m.screens.forEach(function(s){
+    if(s.head)svg+='<text x="'+XS+'" y="'+(s.head.y+4)+'" font-size="12" font-weight="600" fill="var(--ink-3)">'+esc(s.head.g)+'</text>';
+    svg+=box(s.key,XS,s.y,s.label,s.drift?'warn':'',s.drift?'var(--warn)':NORMAL&&(!m.dev||m.dev.base)?'var(--ok)':'',s.sub)});
+  var opts=[['rooms','Room screens'],['all','Every router output'],['rtr','Router: inputs to outputs'],['sw','Switcher: inputs to outputs']];
+  ROOMS.forEach(function(r){opts.push([r.id,r.place+' switcher: inputs to outputs'])});
+  h+='<div class="field"><label for="map-scope" style="font-weight:500">Show</label><select id="map-scope">'+opts.map(function(o){return '<option value="'+esc(o[0])+'"'+(o[0]===mapScope?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select>';
+  if(!m.dev)h+=flowSeg();
+  h+='<input type="search" id="map-q" placeholder="Camera 3" aria-label="Filter the map by name" value="'+esc(mapQ)+'">';
+  h+='<label class="check"><input type="checkbox" id="map-unused"'+(mapUnused?' checked':'')+'>Include unused inputs</label>';
+  if(mapScope==='all'||mapScope==='rtr')h+='<label class="check"><input type="checkbox" id="map-named"'+(mapNamed?' checked':'')+'>Named only</label>';
+  h+='</div>';
+  if(!m.dev)h+='<div class="field"><span style="font-weight:500">Devices</span><label class="check"><input type="checkbox" id="map-rtr"'+(mapShowRtr?' checked':'')+'>Router</label><label class="check"><input type="checkbox" id="map-sw"'+(mapShowSw?' checked':'')+'>Switcher</label><label for="map-paths" style="font-weight:500;margin-left:8px">Paths</label><select id="map-paths"><option value="all"'+(mapPaths==='all'?' selected':'')+'>All paths</option><option value="sw"'+(mapPaths==='sw'?' selected':'')+'>Through the switcher</option><option value="direct"'+(mapPaths==='direct'?' selected':'')+'>Router only</option></select></div>';
+  var nd=m.screens.filter(function(s){return s.drift}).length,nIn=Object.keys(m.nodes).filter(function(k){return m.nodes[k].col==='src'&&!m.nodes[k].unused}).length,nUn=Object.keys(m.nodes).filter(function(k){return m.nodes[k].unused}).length;
+  h+='<div class="field"><span class="chip">'+m.screens.length+(m.dev?' outputs':mapScope==='all'?' router outputs':' screens')+'</span><span class="chip">'+nIn+(m.dev?' inputs in use':' sources in use')+'</span>'+(nUn?'<span class="chip">'+nUn+' unused</span>':'')+(nd?'<span class="chip warn">'+nd+(nd===1?' differs from ':' differ from ')+esc(refName())+'</span>':NORMAL?'<span class="chip ok">All match Normal service</span>':'<span class="chip">No Normal service saved, so nothing is marked as changed</span>')+'</div>';
+  if(!m.screens.length&&!nUn)h+='<section class="card panel"><p class="empty">Nothing matches that. Clear the filters to see everything.</p></section>';
+  else h+='<section class="card panel"><!--detail--><div class="scroll"><svg viewBox="0 0 '+W+' '+m.H+'" role="group" aria-label="System map" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div><p class="note" style="margin-top:12px">Amber marks an output that differs from '+esc(refName())+'. '+(m.dev?'':'Blue boxes are router ports and purple boxes are '+(CONVS.length?'the switcher or a converter. ':'inside the switcher. ')+(flowMode==='plumbing'?'This is the plumbing only: what each mix is cut to is left out. ':''))+(mapUnused?'Dashed boxes are inputs that feed nothing shown here. ':'')+'Colours show how things are routed, not whether a picture is actually present.</p></section>';
+  var dt='<div id="map-detail" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)">';
+  var ss=m.screens.filter(function(s){return s.key===mapSel})[0],clr='<button type="button" class="btn" data-act="mapclear">Clear selection</button>';
+  if(ss&&ss.d!==undefined){var ds=describe(ss.d,flowMode==='plumbing'),g=groupOf(ss.d);
+    dt+='<h2>'+esc(outName(ss.d))+' is showing '+esc(ds.title)+(ds.me?', '+esc(ds.sub.charAt(0).toLowerCase()+ds.sub.slice(1)):'')+'</h2><div class="field" style="margin-top:8px">'+(ss.drift?'<span class="chip warn">Differs from '+esc(refName())+'</span>':'')+(ss.lock?'<span class="chip">Locked</span>':'')+deckChip(ss.d)+monChip(ss.d)+(g?'<button type="button" class="btn" data-act="openroom" data-g="'+g.id+'">Open '+esc(g.name)+'</button>':'')+clr+'</div>'+pathNotes(ss.d)}
+  else if(ss){dt+='<h2>'+esc(ss.label)+' is fed by '+esc(m.nodes[ss.k.src].label)+'</h2><div class="field" style="margin-top:8px">'+(ss.drift?'<span class="chip warn">Differs from '+esc(refName())+'</span>':'')+clr+'</div>'}
+  else if(mapSel){var n=m.nodes[mapSel];
+    dt+='<h2>'+esc(n.label)+(lit.length?' feeds '+lit.length+(lit.length===1?' output':' outputs'):' is not feeding anything shown here')+'</h2>'+(lit.length?'<p class="note" style="margin:6px 0 0">'+esc(lit.map(function(s){return s.label}).join(', '))+'</p>':'')+'<div class="field" style="margin-top:8px">'+clr+'</div>'}
+  else dt+='<p class="empty" style="margin:0">Select a screen to follow its picture from source to screen. Select any box on the way to see everything that passes through it.</p>';
+  dt+='</div>';
+  $('main').innerHTML=h.replace('<!--detail-->',function(){return dt})}
+
+/* ---------- floor plan ---------- */
+var localImg=null,arrange=false,placing=null,floorSel=null,dragging=false,justDragged=false,floorErr='',drag=null;
+if(!LIVE){try{var fp=JSON.parse(localStorage.getItem('vr-floor-pins')||'null');if(fp)FLOOR.pins=fp}catch(e){}}
+function floorItems(){
+  var a=[];GROUPS.forEach(function(g){g.dests.forEach(function(d){a.push({key:'d'+d,d:d,label:outName(d),kind:'screen'})})});
+  a.push({key:'dev-rtr',label:'Router',kind:'device',up:!LIVE||!conn||!!conn.rtr});
+  a.push({key:'dev-sw',label:'Switcher',kind:'device',up:!LIVE||!conn||!!(conn.sw&&conn.mix)});
+  ROOMS.forEach(function(r){a.push({key:'dev-'+r.id,label:r.place+' switcher',kind:'device',up:r.up!==false,room:r.id})});
+  return a}
+function savePins(){
+  if(LIVE)fetch('floor-pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(FLOOR.pins)}).catch(function(){say('The layout could not be saved. Try again.','bad')});
+  else{try{localStorage.setItem('vr-floor-pins',JSON.stringify(FLOOR.pins))}catch(e){}}}
+function renderFloor(){
+  var items=floorItems().filter(volCanSee),placed=items.filter(function(i){return FLOOR.pins[i.key]}),un=items.filter(function(i){return !FLOOR.pins[i.key]}),img=localImg||(FLOOR.hasImage?'floor-image?v='+FLOOR.v:null),h='';
+  if(role!=='engineer'){arrange=false;placing=null}
+  h+='<div class="field">';
+  if(role==='engineer')h+='<button type="button" class="btn'+(arrange?' on':'')+'" data-act="arrange" aria-pressed="'+arrange+'">'+(arrange?'Done arranging':'Arrange')+'</button>';
+  if(arrange)h+='<label class="btn" for="floor-file">'+(img?'Replace plan image':'Add plan image')+'</label><input type="file" id="floor-file" accept="image/png,image/jpeg,image/webp" hidden>'+(img?'<button type="button" class="btn" data-act="floor-noimg">Remove image</button>':'');
+  h+='<span class="chip">'+placed.length+' of '+items.length+' placed</span></div>';
+  if(floorErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(floorErr)+'</p>';
+  if(!img&&!placed.length&&!arrange){
+    h+='<section class="card hero info"><div class="state"><div class="big">No floor plan yet</div><p>'+(role==='engineer'?'Choose Arrange to add a plan of the building and place each screen where it really is.':'Switch to Engineer and choose Arrange to add a plan of the building. Screens then appear where they really are.')+'</p></div></section>';
+    $('main').innerHTML=h;return}
+  h+='<section class="card panel"><div class="plan'+(img?'':' blank')+(arrange?' arr':'')+'" id="plan">'+(img?'<img src="'+esc(img)+'" alt="Plan of the building" draggable="false">':'');
+  placed.forEach(function(i){var p=FLOOR.pins[i.key],cls='pin',sub='';
+    if(i.kind==='screen'){sub=describe(i.d).title;if(drifted(i.d))cls+=' warn';else if(NORMAL)cls+=' ok'}
+    else{cls+=' dev';sub=i.up?'Connected':'Not answering';if(!i.up)cls+=' bad'}
+    if(floorSel===i.key)cls+=' sel';
+    h+='<button type="button" class="'+cls+'" data-pin="'+i.key+'" style="left:'+p.x+'%;top:'+p.y+'%"><b>'+esc(i.label)+'</b><small>'+esc(sub)+'</small></button>'});
+  h+='</div>';
+  if(arrange){
+    var pl=items.filter(function(i){return i.key===placing})[0];
+    h+='<p class="note" style="margin-top:12px">'+(pl?'Now click the plan where '+esc(pl.label)+' is.':'Drag a pin to move it. To add one, select it below and then click the plan.')+'</p>';
+    if(un.length){h+='<div class="presets" style="margin-top:8px">';un.forEach(function(i){h+='<button type="button" class="btn'+(placing===i.key?' on':'')+'" data-act="place" data-k="'+i.key+'" aria-pressed="'+(placing===i.key)+'">'+esc(i.label)+'</button>'});h+='</div>'}}
+  else h+='<p class="note" style="margin-top:12px">Amber pins differ from '+esc(refName())+'. Purple pins are equipment.</p>';
+  h+='</section><section class="card panel">';
+  var it=items.filter(function(i){return i.key===floorSel})[0],rm=arrange?'<button type="button" class="btn" data-act="unpin">Remove from plan</button>':'';
+  if(it&&it.kind==='screen'){var ds=describe(it.d),g=groupOf(it.d);
+    h+='<h2>'+esc(it.label)+' is showing '+esc(ds.title)+(ds.me?', '+esc(ds.sub.charAt(0).toLowerCase()+ds.sub.slice(1)):'')+'</h2><div class="field">'+(drifted(it.d)?'<span class="chip warn">Differs from '+esc(refName())+'</span>':'')+(RT.lock[it.d]?'<span class="chip">Locked</span>':'')+'<button type="button" class="btn" data-act="trace" data-d="'+it.d+'">Signal path</button><button type="button" class="btn" data-act="openroom" data-g="'+g.id+'">Open '+esc(g.name)+'</button>'+rm+'</div>'}
+  else if(it){h+='<h2>'+esc(it.label)+'</h2><div class="field"><span class="chip '+(it.up?'ok':'warn')+'">'+(it.up?'Connected':'Not answering')+'</span>'+(it.room?'<button type="button" class="btn" data-act="openroom" data-g="'+it.room+'">Open '+esc(PLACES[it.room])+'</button>':'<button type="button" class="btn" data-nav="devices">Devices</button>')+rm+'</div>'}
+  else h+='<p class="empty">Select a pin to see what that screen is showing.</p>';
+  h+='</section>';
+  $('main').innerHTML=h}
+document.addEventListener('pointerdown',function(e){var p=e.target.closest&&e.target.closest('[data-pin]');if(!p||!arrange||!$('plan'))return;drag={key:p.dataset.pin,el:p,r:$('plan').getBoundingClientRect(),sx:e.clientX,sy:e.clientY,moved:false}});
+document.addEventListener('pointermove',function(e){if(!drag)return;if(!drag.moved&&Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)<5)return;drag.moved=true;dragging=true;
+  drag.x=Math.min(100,Math.max(0,(e.clientX-drag.r.left)/drag.r.width*100));drag.y=Math.min(100,Math.max(0,(e.clientY-drag.r.top)/drag.r.height*100));
+  drag.el.style.left=drag.x+'%';drag.el.style.top=drag.y+'%'});
+function endDrag(){if(!drag)return;var d=drag;drag=null;if(!d.moved)return;
+  FLOOR.pins[d.key]={x:Math.round(d.x*10)/10,y:Math.round(d.y*10)/10};dragging=false;justDragged=true;setTimeout(function(){justDragged=false},80);savePins();render()}
+document.addEventListener('pointerup',endDrag);document.addEventListener('pointercancel',endDrag);
+
+/* ---------- spaces editor ---------- */
+var spErr='';
+function renderSpaces(){
+  var usedD={};GROUPS.forEach(function(g){g.dests.forEach(function(d){usedD[d]=1})});
+  var named='',plain='';RT.outL.forEach(function(l,o){if(usedD[o])return;var op='<option value="'+o+'">'+(o+1)+' · '+esc(clean(l))+'</option>';if(plainOut(l))plain+=op;else named+=op});
+  var options=(named?'<optgroup label="Named router outputs">'+named+'</optgroup>':'')+(plain?'<optgroup label="Unnamed router outputs">'+plain+'</optgroup>':'');
+  var h='<section class="card hero info"><div class="state"><div class="big">Spaces set up the app for everyone</div><p>Volunteers see these names, in this order, with these screens. '+(LIVE?'Changes are saved on the server as you make them.':'This is a snapshot, so changes are saved in this browser only.')+'</p></div></section>';
+  if(spErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(spErr)+'</p>';
+  GROUPS.forEach(function(g,gi){
+    h+='<section class="card panel"><div class="field"><label for="sp-name-'+g.id+'" style="font-weight:500">Name</label><input type="text" id="sp-name-'+g.id+'" data-sp-name="'+g.id+'" value="'+esc(g.name)+'" style="flex:1;min-width:160px;max-width:320px">'+(g.hidden?'<span class="chip warn">Hidden from volunteers</span>':'');
+    if(gi>0)h+='<button type="button" class="btn" data-act="sp-up" data-g="'+g.id+'">Move up</button>';
+    if(gi<GROUPS.length-1)h+='<button type="button" class="btn" data-act="sp-down" data-g="'+g.id+'">Move down</button>';
+    h+='<button type="button" class="btn" data-act="sp-del" data-g="'+g.id+'">Delete space</button></div>';
+    h+='<h3 style="margin:14px 0 8px">Screens in this space</h3><div class="presets">';
+    if(g.dests.length)g.dests.forEach(function(d){var nm=RT.outL[d]?clean(RT.outL[d]):'Output '+(d+1);h+='<span class="chip tagx">'+esc(nm)+'<button type="button" class="xbtn" data-act="sp-rm" data-g="'+g.id+'" data-d="'+d+'" aria-label="Remove '+esc(nm)+' from '+esc(g.name)+'">×</button></span>'});
+    else h+='<span class="empty">No screens yet. Add one below.</span>';
+    h+='</div>';
+    h+=options?'<div class="field" style="margin-top:10px"><select id="sp-add-'+g.id+'" aria-label="Router output to add to '+esc(g.name)+'">'+options+'</select><button type="button" class="btn" data-act="sp-add" data-g="'+g.id+'">Add screen</button></div>':'<p class="note" style="margin-top:10px">Every router output is already in a space.</p>';
+    if(g.modes.length){h+='<h3 style="margin:14px 0 8px">Quick settings</h3><div class="presets">';
+      g.modes.forEach(function(m,i){h+='<span class="chip tagx">'+esc(m.name)+'<button type="button" class="xbtn" data-act="sp-rmmode" data-g="'+g.id+'" data-i="'+i+'" aria-label="Delete the quick setting '+esc(m.name)+'">×</button></span>'});h+='</div>'}
+    h+='<label class="check" style="margin-top:14px"><input type="checkbox" id="sp-vis-'+g.id+'" data-sp-vis="'+g.id+'"'+(g.hidden?'':' checked')+'>Volunteers can see this space</label>';
+    h+='<label class="check" style="margin-top:8px"><input type="checkbox" id="sp-ask-'+g.id+'" data-ask="'+g.id+'"'+(g.confirm?' checked':'')+'>Ask before changing these screens</label></section>'});
+  h+='<section class="card panel"><h2>Add a space</h2><div class="field"><input type="text" id="sp-new" placeholder="Chapel" aria-label="Name for the new space" style="min-width:200px"><button type="button" class="btn primary" data-act="sp-new">Add space</button></div><p class="note" style="margin-top:10px">New quick settings are made on a space\'s own page: set the screens how you want them, then save that as a preset.</p></section>';
+  h+='<section class="card panel"><h2>What else volunteers can see</h2>';
+  ROOMS.forEach(function(r){h+='<label class="check" style="margin-top:8px"><input type="checkbox" id="pf-room-'+esc(r.id)+'" data-pref-room="'+esc(r.id)+'"'+(PREFS.hideRooms.indexOf(r.id)<0?' checked':'')+'>'+esc(r.place)+', which has its own switcher</label>'});
+  h+='<label class="check" style="margin-top:8px"><input type="checkbox" id="pf-floor"'+(PREFS.hideFloor?'':' checked')+'>The floor plan</label>';
+  h+='<label class="check" style="margin-top:8px"><input type="checkbox" id="pf-gear"'+(PREFS.hideGear?'':' checked')+'>The router and switcher on the floor plan</label>';
+  h+='<p class="note" style="margin-top:12px">Engineers always see everything. '+(ROOMS.length?'Rooms with their own switcher are named in venue.json on the server.':'')+'</p></section>';
+  if(LIVE){h+='<section class="card panel"><h2>Protect Engineer view</h2><p class="note" style="margin-bottom:10px">'+(auth.pinSet?'A PIN is set. Engineer view asks for it, and locks again when you switch back to Volunteer.':'No PIN is set, so anyone can open Engineer view and change this setup.')+'</p>';
+    h+='<div class="field"><input type="password" id="pin-new" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="4 to 8 digits" aria-label="'+(auth.pinSet?'New PIN':'PIN')+'" style="max-width:170px"><button type="button" class="btn primary" data-act="pin-set">'+(auth.pinSet?'Change PIN':'Set PIN')+'</button>'+(auth.pinSet?'<button type="button" class="btn" data-act="pin-remove">Remove PIN</button>':'')+'</div>';
+    if(pinSetErr)h+='<p style="color:var(--bad);font-size:13px;margin-top:6px">'+esc(pinSetErr)+'</p>';
+    h+='<p class="note" style="margin-top:10px">If the PIN is forgotten, delete auth.json next to the server and restart it.</p></section>'}
+  else h+='<p class="note">A PIN can only protect the live app. This snapshot has no server to check one.</p>';
+  $('main').innerHTML=h}
+
+/* ---------- patch and devices ---------- */
+function patchRows(){
+  var needle=pq.trim().toLowerCase(),h='';
+  RT.outL.forEach(function(l,o){if(named&&plainOut(l))return;var s=describe(o),fed=RT.inL[S.RR[o]];
+    if(needle&&(l+' '+s.title+' '+fed+' '+outName(o)).toLowerCase().indexOf(needle)<0)return;
+    h+='<tr class="click" data-row="'+o+'" tabindex="0"><td class="num">'+(o+1)+'</td><td>'+esc(clean(l))+'</td><td>'+esc(s.title)+(s.me?' <span class="chip sw">'+esc(s.sub)+'</span>':'')+'</td><td class="raw" style="font-size:12px">'+esc(fed)+'</td><td>'+(RT.lock[o]?'<span class="chip">Locked</span>':'')+'</td></tr>'});
+  return h||'<tr><td colspan="5">No output matches that.</td></tr>'}
+function renderPatch(){
+  var f=findings(),h='<section class="card panel"><h2>Worth a look</h2><ul class="finds">'+(f.length?f.map(function(x){return '<li>'+esc(x.t)+(x.o!==undefined?' <button type="button" class="linkbtn" data-act="trace" data-d="'+x.o+'">Signal path</button>':'')+'</li>'}).join(''):'<li>Nothing stands out in the current patch.</li>')+'</ul></section>';
+  h+='<div class="field"><input type="search" id="patch-search" placeholder="Green" aria-label="Filter the patch list" value="'+esc(pq)+'"><label class="check"><input type="checkbox" id="patch-named"'+(named?' checked':'')+'>Named outputs only</label></div>';
+  h+='<section class="card"><div class="scroll"><table><thead><tr><th>Out</th><th>Destination</th><th>Showing</th><th>Fed by</th><th></th></tr></thead><tbody id="patch">'+patchRows()+'</tbody></table></div></section>';
+  $('main').innerHTML=h}
+var ADDR={},devForm={subnet:'',ip:'',place:'',role:'room',places:{},roles:{}},devScan=null,devBusy=false,devErr='';
+var ROLE_OPTS=[['room','Room switcher or extra device'],['deck','Recorder (HyperDeck)'],['conv','Converter (Teranex)'],['mon','Monitor (SmartView)'],['router','Main router (replaces the current one)'],['switcher','Main switcher (replaces the current one)']];
+function roleSelect(attr,val){return '<select '+attr+'>'+ROLE_OPTS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'}
+function devPost(body,okMsg){
+  return fetch('devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){
+    if(r.ok){devErr='';if(okMsg)say(okMsg);return true}
+    return r.text().then(function(t){devErr=t||'That did not work. Try again.';render();return false})}).catch(function(){devErr='The server did not answer. Try again.';render();return false})}
+function devAdd(ip,place,role){
+  var go=function(){devPost({action:'add',ip:ip,place:place,role:role},'Device added.').then(function(ok){if(ok&&devScan)devScan.found.forEach(function(d){if(d.ip===ip)d.known=true});if(ok){devForm.ip='';devForm.place='';render()}})};
+  if(role!=='router'&&role!=='switcher'){go();return}
+  pending={raw:true,yes:'Replace it',text:'Replace the main '+role+' with the device at '+ip+'? Spaces, presets and saved Normal service were made for the current one.',fn:go};renderBar()}
+function renderDevices(){
+  var c=conn||{},h='';
+  var rows=[{id:'rtr',role:'Main router',place:PLACES.rtr,model:RT.model,size:RT.inL.length+' in, '+RT.outL.length+' out',ip:ADDR.rtr,up:LIVE?!!c.rtr:null},{id:'sw',role:'Main switcher',place:PLACES.sw,model:SW.model,size:SW.inL.length+' in, '+SW.outL.length+' out',ip:ADDR.sw,up:LIVE?!!(c.sw&&c.mix):null}];
+  ROOMS.forEach(function(r){rows.push({id:r.id,role:'Room switcher',place:r.place,model:r.model,size:r.inL.length+' in, '+r.outL.length+' out',ip:r.ip,up:LIVE?r.up!==false:null,room:true,roomObj:r})});
+  DECKS.forEach(function(k){rows.push({id:k.id,role:'Recorder',place:k.place,model:(k.model||'HyperDeck')+(k.name?' · '+k.name:''),size:k.slot?'recording to '+k.slot:'no disk selected',ip:k.ip,up:LIVE?k.up!==false:null,deck:k})});
+  CONVS.forEach(function(c){rows.push({id:c.id,role:'Converter',place:c.place,model:(c.model||'Teranex')+(c.name?' · '+c.name:''),size:convWork(c),ip:c.ip,up:LIVE?c.up!==false:null,conv:c})});
+  MONS.forEach(function(m){rows.push({id:m.id,role:'Monitor',place:m.place,model:(m.model||'SmartView')+(m.name?' · '+m.name:''),size:(m.input?'on '+m.input:'input not reported')+(m.brightness!=null?', brightness '+m.brightness:'')+(m.border?', '+m.border.toLowerCase()+' border':''),ip:m.ip,up:LIVE?m.up!==false:null,mon:m})});
+  if(devErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(devErr)+'</p>';
+  h+='<section class="card"><div class="rows">';
+  rows.forEach(function(r){
+    h+='<div class="row" style="cursor:default"><div class="nm"><b>'+esc(r.role)+'</b><small style="font-family:var(--sans);font-size:12px">'+esc(r.model||'Unknown model')+' · '+r.size+'</small></div><div class="now">';
+    h+=LIVE?'<label class="lbl" for="dev-place-'+esc(r.id)+'">Where it is<input type="text" id="dev-place-'+esc(r.id)+'" data-dev-place="'+esc(r.id)+'" value="'+esc(r.place||'')+'" placeholder="Rack Room" style="max-width:190px"></label>':'<b>'+esc(r.place||'Place not recorded')+'</b>';
+    h+='</div><div class="tags">'+(r.ip?'<span class="raw" style="font-size:12px">'+esc(r.ip)+'</span>':'')+(r.roomObj&&r.up?liveChips(r.roomObj):'')+(r.up===null?'<span class="chip">Snapshot</span>':!r.up?'<span class="chip warn">Not answering</span>':r.deck?'<span class="chip '+deckState(r.deck).cls+'">'+esc(deckLine(r.deck))+'</span>':r.conv?'<span class="chip '+convState(r.conv).cls+'">'+esc(convState(r.conv).text)+'</span>':'<span class="chip ok">Connected</span>')+(LIVE&&(r.room||r.deck||r.conv||r.mon)?'<button type="button" class="btn" data-act="dev-rm" data-id="'+esc(r.id)+'">Remove</button>':'')+'</div></div>';
+    if(r.mon){var mn=r.mon,mf=mn.feeds||[];
+      h+='<div class="row" style="cursor:default;background:var(--surface-2)"><div class="field" style="flex:1">';
+      if(LIVE){h+='<span class="lbl">Fed by router outputs, SDI 1 first</span>'+(mf.length?mf.map(function(i){return '<span class="chip tagx">'+(i+1)+' · '+esc(clean(RT.outL[i]||''))+'<button type="button" class="xbtn" data-act="mon-link" data-op="rm" data-id="'+mn.id+'" data-port="'+i+'" aria-label="Remove router output '+(i+1)+'">×</button></span>'}).join(''):'<span class="empty">nothing yet</span>');
+        h+='<select id="mon-feeds-'+mn.id+'" aria-label="Router output that feeds '+esc(monName(mn))+'">'+RT.outL.map(function(l,i){return mf.indexOf(i)<0?'<option value="'+i+'">'+(i+1)+' · '+esc(clean(l))+'</option>':''}).join('')+'</select><button type="button" class="btn" data-act="mon-link" data-op="add" data-id="'+mn.id+'">Add</button>'}
+      else h+='<span class="lbl">Fed by '+(mf.length?mf.map(function(i){return 'router output '+(i+1)}).join(', '):'nothing set')+'.</span>';
+      h+='</div></div>'}
+    if(r.conv){var cv=r.conv;
+      var list=function(key,labels,word,help){var a=cv[key]||[],o='<span class="lbl">'+word+'</span>'+(a.length?a.map(function(i){return '<span class="chip tagx">'+(i+1)+' · '+esc(clean(labels[i]||''))+'<button type="button" class="xbtn" data-act="conv-link" data-op="rm" data-list="'+key+'" data-id="'+cv.id+'" data-port="'+i+'" aria-label="Remove router port '+(i+1)+'">×</button></span>'}).join(''):'<span class="empty">nothing yet</span>');
+        return o+'<select id="conv-'+key+'-'+cv.id+'" aria-label="'+help+'">'+labels.map(function(l,i){return a.indexOf(i)<0?'<option value="'+i+'">'+(i+1)+' · '+esc(clean(l))+'</option>':''}).join('')+'</select><button type="button" class="btn" data-act="conv-link" data-op="add" data-list="'+key+'" data-id="'+cv.id+'">Add</button>'};
+      h+='<div class="row" style="cursor:default;background:var(--surface-2)"><div class="field" style="flex:1">';
+      if(LIVE)h+=list('feeds',RT.outL,'Fed by router outputs, SDI 1 first','Router output that feeds '+esc(convName(cv)))+'</div><div class="field" style="flex-basis:100%">'+list('returns',RT.inL,'Comes back on router inputs','Router input that '+esc(convName(cv))+' returns on');
+      else h+='<span class="lbl">Fed by '+((cv.feeds||[]).length?(cv.feeds||[]).map(function(i){return 'router output '+(i+1)}).join(', '):'nothing set')+'. Comes back on '+((cv.returns||[]).length?(cv.returns||[]).map(function(i){return 'router input '+(i+1)}).join(', '):'nothing set')+'.</span>';
+      h+='</div></div>'}
+    if(r.deck){var k=r.deck,rets=k.returns||[];
+      h+='<div class="row" style="cursor:default;background:var(--surface-2)"><div class="field" style="flex:1">';
+      if(LIVE){
+        h+='<label class="lbl" for="deck-feed-'+k.id+'">Records from<select id="deck-feed-'+k.id+'" data-deck-feed="'+k.id+'"><option value="">Not set</option>'+RT.outL.map(function(l,o){return '<option value="'+o+'"'+(k.feed===o?' selected':'')+'>'+(o+1)+' · '+esc(clean(l))+'</option>'}).join('')+'</select></label>';
+        h+='<span class="lbl">Plays back on</span>'+(rets.length?rets.map(function(i){return '<span class="chip tagx">'+(i+1)+' · '+esc(clean(RT.inL[i]||''))+'<button type="button" class="xbtn" data-act="deck-ret-rm" data-id="'+k.id+'" data-port="'+i+'" aria-label="Remove router input '+(i+1)+'">×</button></span>'}).join(''):'<span class="empty">nothing yet</span>');
+        h+='<select id="deck-ret-'+k.id+'" aria-label="Router input to add for '+esc(deckName(k))+'">'+RT.inL.map(function(l,i){return rets.indexOf(i)<0?'<option value="'+i+'">'+(i+1)+' · '+esc(clean(l))+'</option>':''}).join('')+'</select><button type="button" class="btn" data-act="deck-ret-add" data-id="'+k.id+'">Add</button>'}
+      else h+='<span class="lbl">Records from '+(k.feed!=null&&RT.outL[k.feed]?'router output '+(k.feed+1)+' ('+esc(clean(RT.outL[k.feed]))+')':'an output that is not set')+'. Plays back on '+(rets.length?rets.map(function(i){return 'router input '+(i+1)}).join(', '):'nothing yet')+'.</span>';
+      h+='</div></div>'}});
+  h+='</div></section>';
+  if(SW.mix){h+='<section class="card"><div class="scroll"><table><thead><tr><th>Switcher mix</th><th>On program</th><th>On preview</th></tr></thead><tbody>';
+    SW.mix.me.forEach(function(m,i){h+='<tr><td>'+esc(mixName(i+1))+'</td><td>'+esc(m.pgm.name)+'</td><td>'+esc(m.pvw.name)+'</td></tr>'});h+='</tbody></table></div></section>'}
+  if(!LIVE){h+='<p class="note">Adding and removing devices needs the live server. This snapshot shows the devices that were set up when it was taken.</p>';$('main').innerHTML=h;return}
+  var guess=devForm.subnet||(ADDR.rtr?ADDR.rtr.split('.').slice(0,3).join('.'):'');
+  h+='<section class="card panel"><h2>Find devices on the network</h2><p class="note" style="margin-bottom:10px">This looks for Blackmagic routers, switchers, HyperDeck recorders, Teranex converters and SmartView monitors by asking each address on a network who it is. It only reads their greeting and changes nothing.</p>';
+  h+='<div class="field"><label for="dev-subnet" style="font-weight:500">Network</label><input type="text" id="dev-subnet" data-devf="subnet" value="'+esc(guess)+'" placeholder="10.0.0" aria-describedby="dev-subnet-hint" style="max-width:160px"><button type="button" class="btn primary" data-act="dev-scan">'+(devBusy?'Searching…':'Find devices')+'</button><span class="note" id="dev-subnet-hint">The first three numbers of the address.</span></div>';
+  if(devScan){
+    if(!devScan.found.length)h+='<p class="empty" style="margin-top:12px">No routers or switchers answered on '+esc(devScan.searched.join(', '))+'.</p>';
+    else{h+='<div class="rows" style="margin-top:12px;border-top:1px solid var(--line)">';
+      devScan.found.forEach(function(d){
+        h+='<div class="row" style="cursor:default;padding-left:0;padding-right:0"><div class="nm"><b>'+esc(d.model||'Unknown model')+'</b><small>'+esc(d.ip)+(d.name?' · '+esc(d.name):'')+(d.kind==='deck'?' · recorder':d.kind==='conv'?' · converter':d.kind==='mon'?' · monitor':' · '+d.inputs+' in, '+d.outputs+' out')+'</small></div>';
+        if(d.known)h+='<div class="tags"><span class="chip ok">Already added</span></div>';
+        else h+='<div class="tags"><input type="text" id="dev-p-'+esc(d.ip)+'" data-devf="p:'+esc(d.ip)+'" value="'+esc(devForm.places[d.ip]||'')+'" placeholder="Where it is" aria-label="Where '+esc(d.model||'this device')+' is" style="max-width:150px">'+(d.kind==='deck'?'<span class="chip">Recorder</span>':d.kind==='conv'?'<span class="chip">Converter</span>':d.kind==='mon'?'<span class="chip">Monitor</span>':roleSelect('id="dev-r-'+esc(d.ip)+'" data-devf="r:'+esc(d.ip)+'" aria-label="How to use '+esc(d.model||'this device')+'"',devForm.roles[d.ip]||'room'))+'<button type="button" class="btn" data-act="dev-add" data-ip="'+esc(d.ip)+'">Add</button></div>';
+        h+='</div>'});
+      h+='</div>'}
+    if(devScan.other)h+='<p class="note" style="margin-top:10px">'+devScan.other+(devScan.other===1?' other address':' other addresses')+' answered but reported no router or switcher, so '+(devScan.other===1?'it is':'they are')+' not listed.</p>'}
+  h+='</section>';
+  h+='<section class="card panel"><h2>Add a device by address</h2><div class="field"><input type="text" id="dev-ip" data-devf="ip" value="'+esc(devForm.ip)+'" placeholder="10.0.0.20" aria-label="Device address" style="max-width:150px"><input type="text" id="dev-newplace" data-devf="place" value="'+esc(devForm.place)+'" placeholder="Chapel" aria-label="Where the device is" style="max-width:170px">'+roleSelect('id="dev-role" data-devf="role" aria-label="How to use this device"',devForm.role)+'<button type="button" class="btn" data-act="dev-add-manual">Add device</button></div>';
+  h+='<p class="note" style="margin-top:12px">A second router or an extra switcher can be added as a room device. It shows here and in the System map\'s device views, but paths are only traced through the main router and main switcher.</p></section>';
+  $('main').innerHTML=h}
+
+function render(){
+  if(dragging)return;
+  var a=document.activeElement,fid=a&&a.id&&$('main').contains(a)?a.id:null,pos=fid&&a.selectionStart!=null?a.selectionStart:null;
+  var simple=role==='volunteer';
+  document.querySelector('.shell').classList.toggle('simple',simple);
+  if(pinAsk&&simple){$('title').textContent='Venue Router';$('subtitle').textContent='Engineer view is locked.';renderPin();renderBar();return}
+  if(simple&&(view!=='overview'&&view!=='floor'||(view==='floor'&&PREFS.hideFloor)))view='overview';
+  if(simple&&space!=='all'&&((grp(space)&&grp(space).hidden)||PREFS.hideRooms.indexOf(space)>=0))space='all';
+  renderShell();
+  if(simple){if(view==='floor'){renderFloor();$('main').insertAdjacentHTML('afterbegin','<div><button type="button" class="btn lg" data-nav="overview">Back</button></div>')}else renderSimple()}
+  else if(view==='overview')renderOverview();else if(view==='room')renderRoom();else if(view==='map')renderMap();else if(view==='floor')renderFloor();else if(view==='patch')renderPatch();else if(view==='spaces')renderSpaces();else renderDevices();
+  renderBar();
+  if(fid&&$(fid)){$(fid).focus();if(pos!=null){try{$(fid).setSelectionRange(pos,pos)}catch(e){}}}}
+function go(v,room){view=v;if(v==='room'){roomId=room;pick=null;q='';showAll=false}var h=v==='room'?'room-'+room:v;try{if(location.hash!=='#'+h)location.hash=h}catch(e){}render();window.scrollTo(0,0)}
+
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');
+  if(b){var a=b.dataset.act;
+    if(a==='yes'&&pending){if(pending.raw){var f=pending.fn;pending=null;f();render()}else commit(pending.fn,pending.log)}
+    else if(a==='no'){pending=null;renderBar()}
+    else if(a==='dismiss'){toast=null;renderBar()}
+    else if(a==='mapclear'){mapSel=null;render()}
+    else if(a==='pin-cancel'){pinAsk=false;pinErr='';render()}
+    else if(a==='pin-set'){var pv=$('pin-new').value;
+      if(!/^\d{4,8}$/.test(pv)){pinSetErr='Use 4 to 8 digits.';render();$('pin-new').focus();return}
+      fetch('auth/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pv})}).then(function(r){
+        if(!r.ok)return r.text().then(function(t2){pinSetErr=t2||'The PIN could not be saved. Try again.';render()});
+        pinSetErr='';auth.pinSet=true;auth.ok=true;connectES();say('PIN saved. Engineer view now asks for it.');render()}).catch(function(){pinSetErr='The server did not answer. Try again.';render()})}
+    else if(a==='pin-remove'){pending={raw:true,yes:'Remove PIN',text:'Remove the PIN? Anyone will be able to open Engineer view and change the setup.',fn:function(){
+      fetch('auth/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:''})}).then(function(r){if(!r.ok)throw 0;auth.pinSet=false;auth.ok=false;connectES();say('PIN removed. Engineer view is open to anyone.');render()}).catch(function(){say('The PIN could not be removed. Try again.','bad')})}};renderBar()}
+    else if(a==='mon-link'){var ml=b.dataset,mp=ml.op==='rm'?+ml.port:(function(){var s4=$('mon-feeds-'+ml.id);return s4&&s4.value!==''?+s4.value:null})();if(mp!==null)devPost({action:'mon-link',id:ml.id,op:ml.op,port:mp},'Saved for everyone.')}
+    else if(a==='conv-link'){var cl=b.dataset,cp=cl.op==='rm'?+cl.port:(function(){var s3=$('conv-'+cl.list+'-'+cl.id);return s3&&s3.value!==''?+s3.value:null})();if(cp!==null)devPost({action:'conv-link',id:cl.id,list:cl.list,op:cl.op,port:cp},'Saved for everyone.')}
+    else if(a==='deck-ret-add'){var ds2=$('deck-ret-'+b.dataset.id);if(ds2&&ds2.value!=='')devPost({action:'deck-ret-add',id:b.dataset.id,port:+ds2.value},'Saved for everyone.')}
+    else if(a==='deck-ret-rm'){devPost({action:'deck-ret-rm',id:b.dataset.id,port:+b.dataset.port},'Saved for everyone.')}
+    else if(a==='dev-scan'){if(devBusy)return;var sn=($('dev-subnet').value||'').trim();devBusy=true;devErr='';render();
+      fetch('scan?subnet='+encodeURIComponent(sn)).then(function(r){if(r.ok)return r.json();return r.text().then(function(t){throw new Error(t)})}).then(function(j){devScan=j;devBusy=false;render()}).catch(function(e2){devBusy=false;devErr=e2&&e2.message?e2.message:'The search did not finish. Try again.';render()})}
+    else if(a==='dev-add'){var dip=b.dataset.ip,dpl=(devForm.places[dip]||'').trim(),dfd=devScan&&devScan.found.filter(function(x){return x.ip===dip})[0],drl=dfd&&dfd.kind?dfd.kind:(devForm.roles[dip]||'room');if(drl!=='router'&&drl!=='switcher'&&!dpl){devErr='Enter where the device at '+dip+' is before adding it.';render();return}devAdd(dip,dpl,drl)}
+    else if(a==='dev-add-manual'){var mip=devForm.ip.trim(),mpl=devForm.place.trim();if(!mip){devErr='Enter the device address.';render();return}if(devForm.role!=='router'&&devForm.role!=='switcher'&&!mpl){devErr='Enter where the device is.';render();return}devAdd(mip,mpl,devForm.role)}
+    else if(a==='dev-rm'){var rid=b.dataset.id,rr=ROOMS.filter(function(x){return x.id===rid})[0];pending={raw:true,yes:'Remove device',text:'Remove '+(rr?'the '+rr.place+' switcher':rid.indexOf('conv-')===0?'this converter':rid.indexOf('mon-')===0?'this monitor':'this recorder')+' from the app? The device itself is not touched.',fn:function(){devPost({action:'remove',id:rid},'Device removed.')}};renderBar()}
+    else if(a==='sp-new'){var nn=$('sp-new').value.trim();
+      if(!nn){spErr='Enter a name for the new space.';render();return}
+      if(GROUPS.some(function(x){return x.name.toLowerCase()===nn.toLowerCase()})){spErr='A space is already called "'+nn+'". Try another name.';render();return}
+      var base=nn.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)||'space',nid=base,k=2;
+      while(grp(nid)||ROOMS.some(function(r){return r.id===nid})||nid==='all')nid=base+'-'+(k++);
+      spErr='';GROUPS.push({id:nid,name:nn,dests:[],confirm:true,modes:[]});saveSpaces();render()}
+    else if(a==='sp-add'){var ag=grp(b.dataset.g),sel=$('sp-add-'+ag.id);if(sel&&sel.value!==''){ag.dests.push(+sel.value);saveSpaces();render()}}
+    else if(a==='sp-rm'){var rg2=grp(b.dataset.g);rg2.dests=rg2.dests.filter(function(x){return x!==+b.dataset.d});saveSpaces();render()}
+    else if(a==='sp-rmmode'){grp(b.dataset.g).modes.splice(+b.dataset.i,1);saveSpaces();render()}
+    else if(a==='sp-up'||a==='sp-down'){var ix=GROUPS.indexOf(grp(b.dataset.g)),jx=ix+(a==='sp-up'?-1:1);if(jx>=0&&jx<GROUPS.length){var tmp=GROUPS[ix];GROUPS[ix]=GROUPS[jx];GROUPS[jx]=tmp;saveSpaces(true);render()}}
+    else if(a==='sp-del'){var dg=grp(b.dataset.g);pending={raw:true,yes:'Delete space',text:'Delete the space "'+dg.name+'"? Its screens stay on the router and can be added to another space.',fn:function(){GROUPS=GROUPS.filter(function(x){return x!==dg});saveSpaces()}};renderBar()}
+    else if(a==='arrange'){arrange=!arrange;placing=null;floorErr='';render()}
+    else if(a==='place'){placing=placing===b.dataset.k?null:b.dataset.k;render()}
+    else if(a==='unpin'){if(floorSel){delete FLOOR.pins[floorSel];floorSel=null;savePins();render()}}
+    else if(a==='floor-noimg'){if(LIVE)fetch('floor-image',{method:'POST',headers:{'Content-Type':'image/png'},body:''}).catch(function(){say('The image could not be removed. Try again.','bad')});else{localImg=null;render()}}
+    else if(a==='openroom'){if(role==='volunteer'){space=b.dataset.g;try{localStorage.setItem('vr-space',space)}catch(e2){}pick=null;go('overview')}else go('room',b.dataset.g)}
+    else if(a==='undo'){if(history.length){S=JSON.parse(history.pop());addLog('Last change undone','sandbox');render()}}
+    else if(a==='restore'){var rg=grp(space);
+      pending=rg?{fn:function(){restoreSpace(rg)},text:'Set '+rg.name+' back to '+refName()+'?',log:rg.name+' set back to '+refName()}:{fn:function(){S=JSON.parse(JSON.stringify(BASE))},text:'Set every screen back to '+refName()+'?',log:'Everything set back to '+refName()};
+      renderBar()}
+    else if(a==='save-normal'){pending={raw:true,text:(NORMAL?'Replace the saved Normal service with':'Save')+' what the hardware shows right now'+(NORMAL?'?':' as Normal service?'),fn:function(){fetch('normal',{method:'POST'}).then(function(r){if(!r.ok)throw 0;say('Normal service saved.')}).catch(function(){say('Normal service could not be saved. Try again.','bad')})}};renderBar()}
+    else if(a==='trace'){showPath(+b.dataset.d)}
+    else if(a==='mode'){var g=grp(b.dataset.g),m=g.modes[+b.dataset.i];applySet(g,m.set,m.name)}
+    else if(a==='showall'){showAll=true;render();if($('src-search'))$('src-search').focus()}
+    else if(a==='save-preset'){var g2=grp(b.dataset.g),n=$('name-'+g2.id).value.trim();
+      if(!n){errs[g2.id]='Enter a name first.';render();return}
+      if(g2.modes.some(function(x){return x.name.toLowerCase()===n.toLowerCase()})){errs[g2.id]='That name is already used. Try another.';render();return}
+      g2.modes.push({name:n,set:groupSet(g2)});errs[g2.id]='';saveSpaces(true);say('Preset "'+n+'" saved for '+g2.name+'.');render()}
+    return}
+  var t;
+  if((t=e.target.closest('[data-space-go]'))){space=t.dataset.spaceGo;try{localStorage.setItem('vr-space',space)}catch(e3){}pick=null;render();window.scrollTo(0,0);return}
+  if((t=e.target.closest('[data-flow]'))){flowMode=t.dataset.flow;render();return}
+  if((t=e.target.closest('[data-nav]'))){go(t.dataset.nav);return}
+  if((t=e.target.closest('[data-pin]'))){if(justDragged)return;var pk=t.dataset.pin;floorSel=floorSel===pk?null:pk;render();return}
+  if(arrange&&placing&&(t=e.target.closest('#plan'))){var pr=t.getBoundingClientRect();FLOOR.pins[placing]={x:Math.round((e.clientX-pr.left)/pr.width*1000)/10,y:Math.round((e.clientY-pr.top)/pr.height*1000)/10};floorSel=placing;placing=null;savePins();render();return}
+  if((t=e.target.closest('[data-map]'))){var mk=t.getAttribute('data-map');mapSel=mapSel===mk?null:mk;render();
+    var md=$('map-detail');if(md&&mapSel){var mr=md.getBoundingClientRect();if(mr.top<0||mr.top>window.innerHeight-120)md.scrollIntoView({block:'start'})}return}
+  if((t=e.target.closest('[data-role]'))){
+    if(t.dataset.role==='engineer'){
+      if(LIVE&&!auth.pinSet&&auth.open===false){say("Engineer view can only be opened on the computer running Venue Router until a PIN is set there.");return}
+      if(LIVE&&auth.pinSet&&!auth.ok){pinAsk=true;pinErr='';render();if($('pin-in'))$('pin-in').focus();return}
+      role='engineer';render();return}
+    role='volunteer';
+    if(LIVE&&auth.pinSet&&auth.ok){auth.ok=false;fetch('auth/logout',{method:'POST'}).then(connectES,connectES)}
+    render();return}
+  if((t=e.target.closest('[data-mode]'))){if(t.dataset.mode===mode)return;if(t.dataset.mode==='sandbox')mode='sandbox';else{mode='live';if(latest)load(latest)}toast=null;render();return}
+  if((t=e.target.closest('[data-src]'))){if(pick===null){say('Select a screen first, then choose its source.');return}routeDest(pick,+t.dataset.src);return}
+  if(e.target.closest('input,label,select'))return;
+  if((t=e.target.closest('[data-dest]'))){var d=+t.dataset.dest;pick=pick===d?null:d;render();return}
+  if((t=e.target.closest('[data-room]'))){go('room',t.dataset.room);return}
+  if((t=e.target.closest('[data-row]'))){showPath(+t.dataset.row)}});
+document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;var t=e.target;if(t.matches&&t.matches('[data-dest],[data-row],[data-room],[data-map]')){e.preventDefault();t.click()}});
+document.addEventListener('change',function(e){var t=e.target;
+  if(t.id==='floor-file'){var f=t.files&&t.files[0];if(!f)return;
+    if(['image/png','image/jpeg','image/webp'].indexOf(f.type)<0){floorErr='Use a PNG, JPEG or WebP image.';render();return}
+    if(f.size>8*1024*1024){floorErr='That image is over 8 MB. Use a smaller one.';render();return}
+    floorErr='';
+    if(LIVE)fetch('floor-image',{method:'POST',headers:{'Content-Type':f.type},body:f}).then(function(r){if(!r.ok)throw 0;say('Plan image saved.')}).catch(function(){say('The image could not be saved. Try again.','bad')});
+    else{localImg=URL.createObjectURL(f);render()}}
+  else if(t.dataset.deckFeed){devPost({action:'deck-feed',id:t.dataset.deckFeed,port:t.value===''?null:+t.value},'Saved for everyone.')}
+  else if(t.dataset.devPlace){var dv=t.value.trim();if(!dv){devErr='A device needs a place.';render();return}devPost({action:'place',id:t.dataset.devPlace,place:dv},'Saved for everyone.')}
+  else if(t.dataset.devf){var dk=t.dataset.devf;if(dk.indexOf('r:')===0)devForm.roles[dk.slice(2)]=t.value;else if(dk==='role')devForm.role=t.value}
+  else if(t.id==='nice'){NICE=t.checked;render()}
+  else if(t.id==='space'){space=t.value;try{localStorage.setItem('vr-space',space)}catch(e){}
+    pick=null;mapSel=null;q='';showAll=false;var sgn=grp(space);if(sgn&&sgn.dests.indexOf(traced)<0)traced=sgn.dests[0];if(view==='room')view='overview';render()}
+  else if(t.id==='map-scope'){mapScope=t.value;mapSel=null;render()}
+  else if(t.id==='map-unused'){mapUnused=t.checked;render()}
+  else if(t.id==='map-rtr'){mapShowRtr=t.checked;render()}
+  else if(t.id==='map-sw'){mapShowSw=t.checked;render()}
+  else if(t.id==='map-paths'){mapPaths=t.value;render()}
+  else if(t.id==='map-named'){mapNamed=t.checked;render()}
+  else if(t.dataset.ask){grp(t.dataset.ask).confirm=t.checked;saveSpaces(true)}
+  else if(t.dataset.spVis){grp(t.dataset.spVis).hidden=!t.checked;saveSpaces();render()}
+  else if(t.dataset.prefRoom){var pr2=t.dataset.prefRoom;PREFS.hideRooms=PREFS.hideRooms.filter(function(x){return x!==pr2});if(!t.checked)PREFS.hideRooms.push(pr2);savePrefs()}
+  else if(t.id==='pf-floor'){PREFS.hideFloor=!t.checked;savePrefs()}
+  else if(t.id==='pf-gear'){PREFS.hideGear=!t.checked;savePrefs()}
+  else if(t.dataset.spName){var sg2=grp(t.dataset.spName),nv=t.value.trim();
+    if(!nv){spErr='A space needs a name.';render();return}
+    if(GROUPS.some(function(x){return x!==sg2&&x.name.toLowerCase()===nv.toLowerCase()})){spErr='Another space is already called "'+nv+'". Try another name.';render();return}
+    spErr='';sg2.name=nv;saveSpaces();render()}
+  else if(t.id==='patch-named'){named=t.checked;$('patch').innerHTML=patchRows()}
+  else if(t.id==='path-dest'){traced=+t.value;render()}
+  else if(t.id==='hops'){allHops=t.checked;render()}});
+document.addEventListener('input',function(e){var t=e.target;
+  if(t.dataset.devf){var fk=t.dataset.devf;if(fk.indexOf('p:')===0)devForm.places[fk.slice(2)]=t.value;else if(fk==='subnet'||fk==='ip'||fk==='place')devForm[fk]=t.value;return}
+  if(t.id==='map-q'){mapQ=t.value;render()}
+  else if(t.id==='src-search'){q=t.value;$('srcs').innerHTML=srcListHtml()}
+  else if(t.id==='patch-search'){pq=t.value;$('patch').innerHTML=patchRows()}});
+function clearOver(){document.querySelectorAll('.over').forEach(function(x){x.classList.remove('over')})}
+document.addEventListener('dragstart',function(e){var c=e.target.closest&&e.target.closest('[data-src]');if(c){e.dataTransfer.setData('text/plain',c.dataset.src);e.dataTransfer.effectAllowed='copy'}});
+document.addEventListener('dragover',function(e){var t=e.target.closest('[data-dest]');if(t){e.preventDefault();clearOver();t.classList.add('over')}});
+document.addEventListener('dragend',clearOver);
+document.addEventListener('drop',function(e){var t=e.target.closest('[data-dest]');clearOver();if(!t)return;e.preventDefault();var raw=e.dataTransfer.getData('text/plain');if(!/^\d+$/.test(raw)||!RT.inL[+raw])return;routeDest(+t.dataset.dest,+raw)});
+function connectES(){
+  if(!LIVE)return;
+  if(es)es.close();
+  es=new EventSource('events');
+  es.onmessage=function(e){lost=false;var snap=JSON.parse(e.data);if(mode==='live'){load(snap);latest=snap;render()}else{latest=snap;conn=snap.conn;meta(snap);renderShell()}};
+  es.onerror=function(){lost=true;renderShell()}}
+if(LIVE){connectES();window.fetch('auth').then(function(r){return r.json()}).then(function(j){auth.pinSet=!!j.pinSet;auth.ok=!!j.ok;auth.open=!!j.open;render()}).catch(function(){})}
+function fromHash(){var h=(location.hash||'').replace('#','');if(h.indexOf('room-')===0){view='room';roomId=h.slice(5)}else if(['overview','map','floor','path','patch','devices','spaces'].indexOf(h)>=0)view=h==='path'?'map':h;render()}
+window.addEventListener('hashchange',fromHash);
+fromHash();
+})();
+</script>

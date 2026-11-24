@@ -1,0 +1,17 @@
+{
+  "name": "venue-router",
+  "version": "1.0.0",
+  "description": "Watch-only routing console for a Blackmagic Videohub, ATEM and the devices around them",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "atem-connection": "^3.11.1"
+  }
+}

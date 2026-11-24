@@ -1,0 +1,16 @@
+{
+  "places": { "rtr": "Rack Room", "sw": "Rack Room" },
+  "core": { "router": "10.0.0.10", "switcher": "10.0.0.11" },
+  "ties": { "routerToSwitcher": 20, "switcherToRouter": 8 },
+  "common": [],
+  "niceNames": { "out": {}, "src": {}, "mix": {} },
+  "rooms": [
+    { "id": "room-chapel", "place": "Chapel", "ip": "10.0.0.50" }
+  ],
+  "decks": [],
+  "convs": [],
+  "mons": [],
+  "links": [
+    { "room": "room-chapel", "rtrOut": 15, "input": null }
+  ]
+}
