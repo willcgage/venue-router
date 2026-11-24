@@ -2,6 +2,8 @@
 
 A web console that shows what every screen in a building is displaying and traces each picture back to its source. It is built for a Blackmagic Videohub router and an ATEM switcher, and designed so volunteers can read it without understanding a routing table.
 
+There is no installer yet. See [Download and install](#download-and-install) for the steps to set it up by hand.
+
 **It is watch-only.** Nothing in this project sends a command that changes a device. Routers and switchers are only listened to, and recorders are only asked for their status. Changes made in the page are either refused (Live) or pretend (Sandbox).
 
 ## What it does
@@ -95,32 +97,122 @@ The **On now / Plumbing** switch chooses what "the path" means:
 | Starts at | The camera or computer on air | The switcher mix |
 | Changes when | Someone cuts a camera | Someone changes a route |
 
-## Requirements
+## Download and install
 
-- [Node.js](https://nodejs.org/) 18 or later
-- Network access to the devices (TCP 9990 on each, and UDP 9910 on the ATEM)
+There is no installer or package yet. Until there is, these are the steps to get it running by hand. They take about ten minutes.
 
-## Run it
+### 1. What you need
+
+- **A computer that stays on**, running Windows 10 or 11 or macOS, on a network that can reach your devices.
+- **[Node.js](https://nodejs.org/) 18 or later.** Install the LTS version, then open a new terminal window so it is picked up.
+- **The addresses of your main router and main switcher**, such as `10.0.0.10` and `10.0.0.11`.
+- **[Git](https://git-scm.com/)**, if you want to download with one command and update later. It is optional.
+
+The computer must be able to reach these ports on your devices:
+
+| Device | Port |
+|---|---|
+| Videohub router, ATEM switcher | TCP 9990 |
+| ATEM switcher (mix, streaming and recording state) | UDP 9910 |
+| HyperDeck recorder | TCP 9993 |
+| Teranex converter | TCP 9800 |
+| SmartView monitor | TCP 9992 |
+
+### 2. Download it
+
+With Git:
+
+```powershell
+git clone https://github.com/willcgage/venue-router.git
+```
+
+Without Git: on the [repository page](https://github.com/willcgage/venue-router), choose **Code**, then **Download ZIP**, and unzip it somewhere permanent, such as `C:\VenueRouter` or your home folder.
+
+### 3. Install the libraries
+
+In a terminal, inside the folder you downloaded:
 
 ```powershell
 npm install
 ```
 
+### 4. Start it once
+
 ```powershell
 node server.js <router-ip> <switcher-ip>
 ```
 
-Then open http://localhost:8787.
+Then open http://localhost:8787 on that computer. You should see the Volunteer page, with "No spaces yet".
 
-The two addresses name the main router and main switcher. They are saved in `venue.json` the first time, so later starts can leave them off.
+The two addresses are saved in `venue.json`, so you only type them this once. Stop the server with Ctrl+C before the next step.
 
-Run this way, the server listens on this computer only. To open it to the network and keep it running, see "Running it at the church" below.
+If the page says it is still connecting, the computer cannot reach the router or the switcher. Check the addresses and the network.
 
-## Running it at the church
+### 5. Keep it running and open it to the network
 
-To run all the time on a computer at the venue, use the install script for that computer. Each one installs the libraries, opens the app to the network, sets it to start by itself and restart if it stops, and prints the addresses to open.
+Run the install script for your system, from the `deploy` folder.
 
-The computer needs [Node.js](https://nodejs.org/) 18 or later, a copy of this folder, and a network connection that reaches every device the app watches.
+**Windows**, in PowerShell:
+
+```powershell
+.\install-windows.ps1
+```
+
+If Windows says running scripts is disabled, run it this way instead, which allows this one script this one time:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
+```
+
+**Mac**, in Terminal:
+
+```bash
+./install-mac.sh
+```
+
+The script prints the addresses other devices can use. The options are described under [Keeping it running](#keeping-it-running).
+
+### 6. Set it up
+
+Do these on the computer that runs the app. Until a PIN is set, Engineer view only works there.
+
+1. Open http://localhost:8787, choose **Engineer view**, go to **Spaces**, and set a PIN at the bottom.
+2. Go to **Devices** and choose **Find devices** to add recorders, converters, monitors and room switchers.
+3. Tell the app about your tie-lines by editing `ties` in `venue.json`, then restart. See [Set up your venue](#set-up-your-venue). Without this, paths are not followed through the switcher.
+4. Go to **Spaces** and add your rooms and the screens in each.
+5. During a service, when everything is set correctly, choose **Save as Normal service** on the Overview.
+
+### Updating
+
+With Git, inside the folder:
+
+```powershell
+git pull
+```
+
+```powershell
+npm install
+```
+
+Then run the install script again. Your setup files are not touched.
+
+Without Git, download the ZIP again into a new folder and copy your setup files across from the old one.
+
+### Your setup files
+
+Everything about your venue is in these files inside the folder. None of them are part of the download, so back them up, and copy them to move to another computer:
+
+`venue.json`, `spaces.json`, `prefs.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
+
+`auth.json` holds the PIN. Leave it behind when moving and set the PIN again.
+
+### Trying it without installing
+
+Steps 1 to 4 are enough to look around. Run that way, the app is only reachable from that computer and stops when you close the terminal.
+
+## Keeping it running
+
+This is step 5 above in more detail. To run all the time on a computer at the venue, use the install script for that computer. Each one installs the libraries, opens the app to the network, sets it to start by itself and restart if it stops, and prints the addresses to open.
 
 **Windows 10 or 11**, in PowerShell from the `deploy` folder:
 
