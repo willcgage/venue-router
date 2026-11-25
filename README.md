@@ -117,7 +117,16 @@ Pick a computer that stays on and that can reach your devices on the ports liste
 2. Leave **Let phones, tablets and other computers on the network open it** ticked, unless this is a booth computer nobody else connects to.
 3. When it finishes, it opens the app at http://localhost:8787.
 
-The installers are not signed yet. Windows may show "Windows protected your PC": choose **More info**, then **Run anyway**.
+**The installers are not signed yet**, so Windows may object. What to do depends on the message:
+
+- **"Windows protected your PC"** (SmartScreen): choose **More info**, then **Run anyway**. If there is no such button, right-click the file, choose **Properties**, tick **Unblock**, and run it again.
+- **Error 4551, or "An Application Control policy has blocked this file"**: the computer has Smart App Control on, or a policy from whoever manages it. These refuse every unsigned program and there is no way to allow just this one. Do not turn Smart App Control off for this: it cannot be turned back on without reinstalling Windows. Use [Install by hand](#install-by-hand) instead. That route runs the app with Node.js, which is signed, and ends up doing the same job.
+
+To check that a download is the file that was built and tested, compare its SHA-256 with the one shown beside the file on the Releases page:
+
+```powershell
+(Get-FileHash .\VenueRouter-<version>-windows-x64-setup.exe).Hash
+```
 
 What it sets up:
 
@@ -132,7 +141,7 @@ To use another port, run the setup file from a terminal with `/PORT=9000`. To re
 
 ### Mac
 
-1. Open the package. It is not signed yet, so macOS may refuse the first time: right-click it and choose **Open**, or allow it under **System Settings > Privacy & Security**.
+1. Open the package. It is not signed yet, so macOS refuses the first time. Open **System Settings > Privacy & Security**, scroll to the message about the package, and choose **Open Anyway**. On macOS 14 and earlier you can instead right-click the package and choose **Open**.
 2. Enter an administrator password when asked.
 3. Open http://localhost:8787 on that Mac.
 
