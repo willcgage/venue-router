@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Watch-only routing console for a Blackmagic Videohub, ATEM and the devices around them",
   "private": true,
+  "license": "MIT",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

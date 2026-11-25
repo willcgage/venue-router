@@ -19,7 +19,7 @@ const win = process.platform === 'win32', mac = process.platform === 'darwin';
 const inCI = !!process.env.CI;
 
 // Everything that goes into the package. Nothing else in the folder is ever included.
-const APP_FILES = ['server.js', 'data-dir.js', 'capture.js', 'atem-read.js', 'venue-router.html', 'venue.example.json', 'package.json', 'package-lock.json', 'README.md'];
+const APP_FILES = ['server.js', 'data-dir.js', 'capture.js', 'atem-read.js', 'venue-router.html', 'venue.example.json', 'package.json', 'package-lock.json', 'README.md', 'LICENSE'];
 
 const say = msg => console.log(msg);
 const run = (cmd, argv, opts) => execFileSync(cmd, argv, { stdio: 'inherit', ...opts });

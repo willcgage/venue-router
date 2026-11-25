@@ -501,3 +501,9 @@ Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.js
 - Plumbing stops at a switcher mix; it does not draw the inputs available to that mix.
 - The System map's device views show one device at a time; only the first two views trace across the router and switcher together.
 - It has not been observed reacting to a route change made on the hardware during a service.
+
+## Licence
+
+Venue Router is released under the [MIT licence](LICENSE). You are free to use it, change it and share it. It comes with no warranty.
+
+The installers include a copy of Node.js, which has its own licence (`NODE-LICENSE.txt` in the installed folder). Blackmagic Design, ATEM, Videohub, HyperDeck, Teranex and SmartView are trademarks of Blackmagic Design. This project is not affiliated with or endorsed by them.

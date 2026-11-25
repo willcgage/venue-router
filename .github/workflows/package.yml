@@ -148,5 +148,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Venue Router $TAG" --generate-notes
-          gh release upload "$TAG" packages/* --repo "$GITHUB_REPOSITORY" --clobber
+          # GitHub's release service sometimes answers with an error even though the request went through, so every
+          # step looks at what is really there before trying again. A file that is already attached is left alone:
+          # a published installer is never swapped for another build.
+          exists() { gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; }
+          attached() { gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.state == "uploaded") | .name' | grep -qxF "$1"; }
+          for try in 1 2 3 4 5; do
+            exists && break
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Venue Router $TAG" --generate-notes || true
+            exists && break
+            [ "$try" = 5 ] && { echo "Could not create the release."; exit 1; }
+            sleep $((try * 15))
+          done
+          for f in packages/*; do
+            name="$(basename "$f")"
+            for try in 1 2 3 4 5; do
+              if attached "$name"; then echo "$name is attached."; break; fi
+              gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY" --clobber || true
+              if attached "$name"; then echo "$name is attached."; break; fi
+              [ "$try" = 5 ] && { echo "Could not attach $name."; exit 1; }
+              sleep $((try * 15))
+            done
+          done
