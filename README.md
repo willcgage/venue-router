@@ -99,7 +99,83 @@ The **On now / Plumbing** switch chooses what "the path" means:
 
 ## Download and install
 
-There is no installer or package yet. Until there is, these are the steps to get it running by hand. They take about ten minutes.
+Use the installer for your computer. It carries everything the app needs, so there is nothing else to install first.
+
+Get it from the [Releases page](https://github.com/willcgage/venue-router/releases/latest):
+
+| Computer | File |
+|---|---|
+| Windows 10 or 11 | `VenueRouter-<version>-windows-x64-setup.exe` |
+| Mac with Apple silicon | `VenueRouter-<version>-mac-arm64.pkg` |
+| Mac with an Intel processor | `VenueRouter-<version>-mac-x64.pkg` |
+
+Pick a computer that stays on and that can reach your devices on the ports listed under [What you need](#1-what-you-need).
+
+### Windows
+
+1. Run the setup file. Windows asks for an administrator, because the installer adds a start-up task and a firewall rule.
+2. Leave **Let phones, tablets and other computers on the network open it** ticked, unless this is a booth computer nobody else connects to.
+3. When it finishes, it opens the app at http://localhost:8787.
+
+The installers are not signed yet. Windows may show "Windows protected your PC": choose **More info**, then **Run anyway**.
+
+What it sets up:
+
+- **The app** goes in `C:\Program Files\Venue Router`, with its own copy of Node.js.
+- **Your setup** is kept apart in `C:\ProgramData\Venue Router`, so updating never touches it.
+- **A "Venue Router" task** starts the app when Windows starts, before anyone signs in, and restarts it if it stops. It runs as the built-in Local Service account, which has no rights to the rest of the computer.
+- **One firewall rule**, if you left the box ticked. It lets other devices reach this app only, on its port, on networks Windows treats as Private or Domain. If Windows treats your network as Public, other devices stay blocked until you change the network to Private or allow the port yourself.
+
+To use another port, run the setup file from a terminal with `/PORT=9000`. To remove the app, use **Installed apps** in Windows Settings. Your setup is left in place.
+
+**Moving from the install script.** If this computer already runs Venue Router from a downloaded folder with `install-windows.ps1`, just run the setup file. It stops the old copy, takes over its task, and copies your setup files from the old folder the first time. The old folder is left alone and can be deleted once you have checked the new one.
+
+### Mac
+
+1. Open the package. It is not signed yet, so macOS may refuse the first time: right-click it and choose **Open**, or allow it under **System Settings > Privacy & Security**.
+2. Enter an administrator password when asked.
+3. Open http://localhost:8787 on that Mac.
+
+What it sets up:
+
+- **The app** goes in `/Library/Application Support/Venue Router/app`, with its own copy of Node.js.
+- **Your setup** is kept apart in `/Library/Application Support/Venue Router/data`. Reading it needs `sudo`.
+- **A launch daemon** (`com.venuerouter`) starts the app when the Mac starts and restarts it if it stops. It runs as `nobody`, an account with no rights to the rest of the Mac.
+- **Open to the network** on port 8787. To change that, edit `config.json` in the data folder and restart the Mac. If the macOS firewall is on, allow incoming connections for `node` when asked.
+
+To remove it:
+
+```bash
+sudo "/Library/Application Support/Venue Router/app/uninstall.sh"
+```
+
+If this Mac already runs Venue Router from a downloaded folder, run `./install-mac.sh --uninstall` in that folder's `deploy` folder first, then copy your setup files into the data folder.
+
+### First start
+
+The first time, the app asks for the addresses of your main router and main switcher. It checks that both answer, and puts them the right way round if they were swapped. This page only works on the computer the app is installed on.
+
+Then carry on from [Set it up](#6-set-it-up).
+
+### Updating an installed copy
+
+Download the newer installer and run it. Your setup is kept.
+
+### Building the installers
+
+The installers are built and tested by the **Installer packages** workflow in GitHub Actions. On every run it builds each one, installs it on a clean machine, checks that the app answers, installs it again over the top to check the setup survives, and uninstalls it. Pushing a version tag such as `v1.0.0` also attaches the three files to a release.
+
+To build one yourself, on the kind of computer it is for:
+
+```powershell
+node deploy/build-package.js
+```
+
+The result goes in `dist`. The Windows build needs [Inno Setup 6](https://jrsoftware.org/isdl.php).
+
+## Install by hand
+
+These steps run the app straight from the source instead of from an installer. Use them to try a change, or on a system the installers do not cover. They take about ten minutes.
 
 ### 1. What you need
 
@@ -144,7 +220,7 @@ node server.js <router-ip> <switcher-ip>
 
 Then open http://localhost:8787 on that computer. You should see the Volunteer page, with "No spaces yet".
 
-The two addresses are saved in `venue.json`, so you only type them this once. Stop the server with Ctrl+C before the next step.
+The two addresses are saved in `venue.json`, so you only type them this once. If you leave them out, the app asks for them on a setup page instead. Stop the server with Ctrl+C before the next step.
 
 If the page says it is still connecting, the computer cannot reach the router or the switcher. Check the addresses and the network.
 
@@ -200,7 +276,7 @@ Without Git, download the ZIP again into a new folder and copy your setup files 
 
 ### Your setup files
 
-Everything about your venue is in these files inside the folder. None of them are part of the download, so back them up, and copy them to move to another computer:
+Everything about your venue is in these files. An installed copy keeps them in its data folder (`C:ProgramDataVenue Router` on Windows, `/Library/Application Support/Venue Router/data` on a Mac). A copy installed by hand keeps them inside its own folder. None of them are part of the download, so back them up, and copy them to move to another computer:
 
 `venue.json`, `spaces.json`, `prefs.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
 
@@ -212,7 +288,7 @@ Steps 1 to 4 are enough to look around. Run that way, the app is only reachable 
 
 ## Keeping it running
 
-This is step 5 above in more detail. To run all the time on a computer at the venue, use the install script for that computer. Each one installs the libraries, opens the app to the network, sets it to start by itself and restart if it stops, and prints the addresses to open.
+This is step 5 of [Install by hand](#install-by-hand) in more detail. A copy put in by an installer already does all of this. To run all the time on a computer at the venue, use the install script for that computer. Each one installs the libraries, opens the app to the network, sets it to start by itself and restart if it stops, and prints the addresses to open.
 
 **Windows 10 or 11**, in PowerShell from the `deploy` folder:
 
@@ -399,7 +475,9 @@ The addresses can be left off when `venue.json` already holds them. Opened this 
 | `capture.js` | Writes an offline copy of the app with a snapshot inside it |
 | `atem-read.js` | Reads the ATEM's mix state once, used by `capture.js` |
 | `venue.example.json` | The shape of `venue.json`, with made-up addresses |
-| `deploy/` | Install scripts for Windows and Mac |
+| `data-dir.js` | Says where the setup files are kept |
+| `deploy/` | Install scripts for Windows and Mac, and what builds the installers |
+| `.github/workflows/package.yml` | Builds and tests the installers |
 
 Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.json`, `auth.json`, `floor.json`, `floor-image.bin`, `normal-service.json`, `config.json`, `logs/`, `venue-snapshot.html`.
 

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Installed by the Venue Router package. Starts the app when the Mac starts and restarts it if it stops.
+     It runs as "nobody", an account with no rights to the rest of the Mac. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.venuerouter</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Library/Application Support/Venue Router/app/node</string>
+    <string>server.js</string>
+    <string>--data=/Library/Application Support/Venue Router/data</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Library/Application Support/Venue Router/app</string>
+  <key>UserName</key><string>nobody</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>StandardOutPath</key><string>/Library/Application Support/Venue Router/data/logs/venue-router.log</string>
+  <key>StandardErrorPath</key><string>/Library/Application Support/Venue Router/data/logs/venue-router.log</string>
+</dict>
+</plist>

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Runs before the files are copied. Stops the copy that is running and clears the libraries being replaced.
+BASE="/Library/Application Support/Venue Router"
+launchctl bootout system/com.venuerouter 2>/dev/null || true
+rm -rf "$BASE/app/node_modules"
+exit 0

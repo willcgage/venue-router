@@ -1,0 +1,15 @@
+#!/bin/bash
+# Runs after the files are copied. Makes the folder for the saved setup, which updates never touch, and starts the app.
+set -e
+BASE="/Library/Application Support/Venue Router"
+DATA="$BASE/data"
+mkdir -p "$DATA/logs"
+# Open to the network on port 8787 unless a setup already says otherwise.
+[ -f "$DATA/config.json" ] || printf '{"host":"0.0.0.0","port":8787}\n' > "$DATA/config.json"
+chown -R nobody "$DATA"
+chmod 700 "$DATA"
+chown root:wheel /Library/LaunchDaemons/com.venuerouter.plist
+chmod 644 /Library/LaunchDaemons/com.venuerouter.plist
+launchctl bootout system/com.venuerouter 2>/dev/null || true
+launchctl bootstrap system /Library/LaunchDaemons/com.venuerouter.plist
+exit 0

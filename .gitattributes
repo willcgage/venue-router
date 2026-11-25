@@ -1,2 +1,7 @@
 # Shell scripts must keep Unix line endings, or they will not run on a Mac.
 *.sh text eol=lf
+deploy/mac/scripts/* text eol=lf
+*.plist text eol=lf
+# Windows scripts keep Windows line endings
+*.cmd text eol=crlf
+*.iss text eol=crlf

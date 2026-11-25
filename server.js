@@ -3,18 +3,20 @@
 // It never changes a device. Routers and switchers are only listened to. HyperDeck recorders are asked for their
 // status, because they report nothing unless asked. Teranex converters and SmartView monitors are only listened to.
 // No route, record, play or settings command is ever sent.
-// Usage: node server.js [router-ip] [switcher-ip]     (PORT and HOST can be set in the environment)
-// The two addresses can be left out once they are saved in venue.json, which the Devices page does.
+// Usage: node server.js [router-ip] [switcher-ip] [--data=folder]     (PORT and HOST can be set in the environment)
+// The two addresses can be left out. If none are saved yet, the app shows a first-time setup page that asks for them.
+// --data says where the saved setup lives. Without it, that is this folder.
 const net = require('net');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { Atem } = require('atem-connection');
 const crypto = require('crypto');
+const { DATA, args, file: dataFile } = require('./data-dir');
 
 // Where to listen. config.json (written by the install scripts) can set host and port; the environment overrides it.
 let cfg = {};
-try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8').replace(/^﻿/, '')); } catch (e) {}
+try { cfg = JSON.parse(fs.readFileSync(dataFile('config.json'), 'utf8').replace(/^﻿/, '')); } catch (e) {}
 const PORT = +(process.env.PORT || cfg.port || 8787);
 const HOST = process.env.HOST || cfg.host || '127.0.0.1';
 const log = msg => console.log(new Date().toISOString().replace('T', ' ').slice(0, 19) + '  ' + msg);
@@ -216,16 +218,18 @@ function readLive(s) {
 }
 
 // venue.json says where each device is, which rooms have their own switcher, and how rooms are cabled to the core.
-const VENUE_FILE = path.join(__dirname, 'venue.json');
+const VENUE_FILE = dataFile('venue.json');
 let venue = { places: {}, core: {}, rooms: [], decks: [], convs: [], mons: [], links: [] };
 try { venue = { ...venue, ...JSON.parse(fs.readFileSync(VENUE_FILE, 'utf8')) }; } catch (e) { console.log('No venue.json found, so no rooms are shown.'); }
-const core = { router: process.argv[2] || (venue.core || {}).router, switcher: process.argv[3] || (venue.core || {}).switcher };
-if (!core.router || !core.switcher) { console.error('Usage: node server.js <router-ip> <switcher-ip>'); process.exit(1); }
+const core = { router: args[0] || (venue.core || {}).router, switcher: args[1] || (venue.core || {}).switcher };
+// Nothing saved yet: show the first-time setup page instead of the app. Once it has saved the two addresses it
+// starts the app again in a fresh process and this one only waits for it.
+if (!core.router || !core.switcher) { firstTimeSetup(); return; }
 function saveVenue() {
   fs.writeFileSync(VENUE_FILE, JSON.stringify({ ...venue, core }, null, 2) + '\n');
 }
 // Addresses given on the command line are remembered, so later starts (and the install scripts) need none.
-if (process.argv[2] && process.argv[3]) saveVenue();
+if (args[0] && args[1]) saveVenue();
 // Reads a SmartView monitor's greeting on its own port. Sends nothing.
 function probeMon(ip, ms) {
   return new Promise(resolve => {
@@ -288,11 +292,85 @@ function probe(ip, ms) {
   });
 }
 let scanning = false;
+
+// First-time setup. Runs instead of the app while no main router and switcher are saved. It can only be used from
+// the computer the app runs on, and it only reads each device's greeting to check the address. It sends nothing.
+function firstTimeSetup() {
+  const local = req => { const a = req.socket.remoteAddress || ''; return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1'; };
+  const page = body => '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Venue Router setup</title>'
+    + '<style>body{font-family:system-ui,sans-serif;max-width:34rem;margin:0 auto;padding:2rem 1rem;line-height:1.5;color:#1a1d21;background:#f6f7f9}'
+    + '@media(prefers-color-scheme:dark){body{color:#e8eaed;background:#16181c}input{background:#22252b;color:inherit;border-color:#444}}'
+    + 'h1{font-size:1.3rem}label{display:block;font-weight:600;margin-top:1rem}input{display:block;width:100%;box-sizing:border-box;font:inherit;padding:.5rem;margin-top:.25rem;border:1px solid #9aa0a6;border-radius:6px}'
+    + 'small{display:block;opacity:.75}button{font:inherit;font-weight:600;padding:.55rem 1rem;margin:1.25rem .5rem 0 0;border-radius:6px;border:1px solid #2456c8;background:#2456c8;color:#fff;cursor:pointer}'
+    + 'button.alt{background:transparent;color:inherit;border-color:#9aa0a6}#msg{margin-top:1rem;font-weight:600}</style></head><body>' + body + '</body></html>';
+  const form = '<h1>Set up Venue Router</h1><p>Venue Router watches your video router and switcher. It never changes them. Enter the network address of each to start.</p>'
+    + '<form id="f"><label for="r">Main video router<small>The Blackmagic Videohub. For example 10.0.0.12</small><input id="r" inputmode="decimal" autocomplete="off" required></label>'
+    + '<label for="s">Main switcher<small>The ATEM. For example 10.0.0.11</small><input id="s" inputmode="decimal" autocomplete="off" required></label>'
+    + '<button type="submit">Check and save</button><button type="button" class="alt" id="force" hidden>Save without checking</button></form><p id="msg" role="status"></p>'
+    + '<script>var $=function(i){return document.getElementById(i)};function send(force){$("msg").textContent="Checking the two addresses...";'
+    + 'fetch("/setup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({router:$("r").value.trim(),switcher:$("s").value.trim(),force:!!force})})'
+    + '.then(function(x){return x.json()}).then(function(j){$("msg").textContent=j.message;$("force").hidden=!j.canForce;if(j.ok)setTimeout(function(){location.reload()},4000)})'
+    + '.catch(function(){$("msg").textContent="Could not reach the app. Try again."})}'
+    + '$("f").addEventListener("submit",function(e){e.preventDefault();send(false)});$("force").addEventListener("click",function(){send(true)})</script>';
+  const away = '<h1>Venue Router is not set up yet</h1><p>Open it on the computer it is installed on to finish setting it up. This page will work once that is done.</p>';
+  const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+  let saved = false;
+  const srv = http.createServer((req, res) => {
+    const url = req.url.split('?')[0];
+    if (req.method === 'POST' && url === '/setup') {
+      if (!local(req)) return json(res, 403, { ok: false, message: 'Setup can only be done on the computer the app is installed on.' });
+      if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json') return json(res, 415, { ok: false, message: 'Bad request.' });
+      if (saved) return json(res, 200, { ok: true, message: 'Saved. Starting Venue Router...' });
+      let raw = '';
+      req.on('data', d => { raw += d; if (raw.length > 2000) req.destroy(); });
+      req.on('end', async () => {
+        let b = {};
+        try { b = JSON.parse(raw); } catch (e) {}
+        let r = String(b.router || ''), s = String(b.switcher || '');
+        if (!isPrivate(r) || !isPrivate(s)) return json(res, 400, { ok: false, message: 'Enter two addresses on your own network, such as 10.0.0.12 or 192.168.1.20.' });
+        if (r === s) return json(res, 400, { ok: false, message: 'The router and the switcher need different addresses.' });
+        let note = '';
+        if (!b.force) {
+          const [pr, ps] = await Promise.all([probe(r, 2500), probe(s, 2500)]);
+          const isAtem = p => /atem/i.test(p.model || '');
+          if (pr.answered && ps.answered && isAtem(pr) && !isAtem(ps)) { [r, s] = [s, r]; note = ' The two were the other way round, so they were swapped: the router is ' + r + ' and the switcher is ' + s + '.'; }
+          else if (!pr.answered || !ps.answered) {
+            const dead = [!pr.answered ? r : null, !ps.answered ? s : null].filter(Boolean).join(' and ');
+            return json(res, 200, { ok: false, canForce: true, message: 'Nothing answered at ' + dead + '. Check the address and that the device is on. If it is only switched off for now, you can save without checking.' });
+          }
+        }
+        if (saved) return json(res, 200, { ok: true, message: 'Saved. Starting Venue Router...' });
+        try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(VENUE_FILE, JSON.stringify({ ...venue, core: { router: r, switcher: s } }, null, 2) + '\n'); }
+        catch (e) { return json(res, 500, { ok: false, message: 'Could not save the setup in ' + DATA + ': ' + e.message }); }
+        saved = true;
+        log('First-time setup saved: router ' + r + ', switcher ' + s + '. Starting the app.');
+        json(res, 200, { ok: true, message: 'Saved.' + note + ' Starting Venue Router...' });
+        srv.close(() => {
+          const child = require('child_process').spawn(process.execPath, process.argv.slice(1), { stdio: 'inherit' });
+          child.on('exit', code => process.exit(code == null ? 1 : code));
+          const stop = () => { child.kill(); };
+          process.on('SIGTERM', stop); process.on('SIGINT', stop);
+        });
+        if (srv.closeAllConnections) setTimeout(() => srv.closeAllConnections(), 500);
+      });
+      return;
+    }
+    if (req.method === 'GET' && (url === '/' || url === '/index.html')) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(page(local(req) ? form : away));
+      return;
+    }
+    res.writeHead(404); res.end('Not set up yet');
+  });
+  srv.listen(PORT, HOST, () => {
+    log('Venue Router is not set up yet. Open http://localhost:' + PORT + ' on this computer and enter the router and switcher addresses.');
+  });
+}
 function knownIps() { return [core.router, core.switcher].concat(rooms.map(r => r.ip), decks.map(d => d.ip), convs.map(c => c.ip), mons.map(m => m.ip)); }
 
 // Floor plan: pin positions live in floor.json, the plan image in floor-image.bin. Both are local files only.
-const FLOOR_FILE = path.join(__dirname, 'floor.json');
-const FLOOR_IMG = path.join(__dirname, 'floor-image.bin');
+const FLOOR_FILE = dataFile('floor.json');
+const FLOOR_IMG = dataFile('floor-image.bin');
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 let floor = { pins: {}, imageType: null, v: 0 };
 try { floor = { ...floor, ...JSON.parse(fs.readFileSync(FLOOR_FILE, 'utf8')) }; } catch (e) {}
@@ -307,7 +385,7 @@ function readBody(req, limit) {
 }
 
 // Spaces: the room names, their screens and presets, set up by an engineer and shared with every viewer.
-const SPACES_FILE = path.join(__dirname, 'spaces.json');
+const SPACES_FILE = dataFile('spaces.json');
 let spaces = null;
 try { spaces = JSON.parse(fs.readFileSync(SPACES_FILE, 'utf8')); } catch (e) {}
 function cleanSpaces(raw) {
@@ -328,12 +406,12 @@ function cleanSpaces(raw) {
 }
 
 // What volunteers are allowed to see beyond the spaces themselves.
-const PREFS_FILE = path.join(__dirname, 'prefs.json');
+const PREFS_FILE = dataFile('prefs.json');
 let prefs = { hideRooms: [], hideFloor: false, hideGear: false };
 try { prefs = { ...prefs, ...JSON.parse(fs.readFileSync(PREFS_FILE, 'utf8')) }; } catch (e) {}
 
 // Engineer PIN. Only a salted hash is kept, in auth.json. Without a PIN, Engineer view is open to anyone.
-const AUTH_FILE = path.join(__dirname, 'auth.json');
+const AUTH_FILE = dataFile('auth.json');
 const SESSION_MS = 12 * 60 * 60 * 1000;
 let authCfg = null;
 try { authCfg = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8')); } catch (e) {}
@@ -368,7 +446,7 @@ const GUARDED = ['/normal', '/spaces', '/prefs', '/devices', '/floor-image', '/f
 const clients = new Map();
 let lastBody = '', lastJson = null, lastPublic = null, timer = null;
 // Normal service is a saved copy of the routes, kept in a local file. Saving it never touches the hardware.
-const NORMAL_FILE = path.join(__dirname, 'normal-service.json');
+const NORMAL_FILE = dataFile('normal-service.json');
 let normal = null;
 try { normal = JSON.parse(fs.readFileSync(NORMAL_FILE, 'utf8')); } catch (e) {}
 const upSeen = {};

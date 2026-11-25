@@ -1,0 +1,152 @@
+# Builds the installer packages, installs each one on a clean machine to prove it works, and keeps the results.
+#   - On a pull request that touches the app or the packaging: build and test only.
+#   - Run by hand (Actions > Installer packages > Run workflow): build and test, packages kept with the run.
+#   - On a version tag such as v1.0.0: build, test, and attach the packages to a GitHub release.
+name: Installer packages
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths: ['server.js', 'data-dir.js', 'package.json', 'package-lock.json', 'deploy/**', '.github/workflows/package.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    timeout-minutes: 20
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Make sure Inno Setup is there
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+      - name: Build the installer
+        run: node deploy/build-package.js
+      - name: Install it, check it runs, and uninstall it
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist\*-setup.exe | Select-Object -First 1).FullName
+          # Waits for the setup program itself, not for everything it starts, and gives up after five minutes
+          function Invoke-Setup([string]$File, [string[]]$Arguments, [string]$What) {
+            $p = Start-Process $File -ArgumentList $Arguments -PassThru
+            if (-not $p.WaitForExit(300000)) {
+              Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'powershell|setup|unins|icacls|node|cmd' } | Select-Object ProcessId, ParentProcessId, Name, CommandLine | Format-List | Out-String -Width 300 | Write-Host
+              throw "$What did not finish in five minutes."
+            }
+            if ($p.ExitCode -ne 0) { throw "$What ended with code $($p.ExitCode)" }
+          }
+          $logDir = $env:RUNNER_TEMP
+          Invoke-Setup $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS="network"', '/PORT=8791', "/LOG=$logDir/setup-1.log") 'Setup'
+          $data = "$env:ProgramData\Venue Router"
+          $ok = $false
+          foreach ($i in 1..30) {
+            try { $r = Invoke-WebRequest http://localhost:8791/ -UseBasicParsing -TimeoutSec 3; if ($r.Content -match 'Set up Venue Router') { $ok = $true; break } } catch {}
+            Start-Sleep 1
+          }
+          Get-Content "$data\logs\install.log", "$data\logs\venue-router.log" -ErrorAction SilentlyContinue
+          if (-not $ok) { throw 'The installed app did not answer with its setup page.' }
+          $task = Get-ScheduledTask -TaskName 'Venue Router'
+          if ($task.Principal.UserId -notmatch 'LOCAL SERVICE') { throw "The task runs as $($task.Principal.UserId), not Local Service." }
+          $cfg = Get-Content "$data\config.json" -Raw | ConvertFrom-Json
+          if ($cfg.host -ne '0.0.0.0' -or $cfg.port -ne 8791) { throw "config.json is wrong: $($cfg | ConvertTo-Json -Compress)" }
+          if (-not (Get-NetFirewallRule -DisplayName 'Venue Router' -ErrorAction SilentlyContinue)) { throw 'The firewall rule is missing.' }
+
+          # Installing again over the top must keep the saved setup and come back up
+          Set-Content "$data\spaces.json" '[]'
+          Invoke-Setup $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$logDir/setup-2.log") 'The second setup'
+          if (-not (Test-Path "$data\spaces.json")) { throw 'Updating removed the saved setup.' }
+          $ok = $false
+          foreach ($i in 1..30) { try { Invoke-WebRequest http://localhost:8791/ -UseBasicParsing -TimeoutSec 3 | Out-Null; $ok = $true; break } catch {}; Start-Sleep 1 }
+          if (-not $ok) { throw 'The app did not come back after updating.' }
+
+          $un = Join-Path $env:ProgramFiles 'Venue Router\unins000.exe'
+          Invoke-Setup $un @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'Uninstall'
+          Start-Sleep 8
+          if (Get-ScheduledTask -TaskName 'Venue Router' -ErrorAction SilentlyContinue) { throw 'Uninstall left the task behind.' }
+          if (Get-NetFirewallRule -DisplayName 'Venue Router' -ErrorAction SilentlyContinue) { throw 'Uninstall left the firewall rule behind.' }
+          if (Get-NetTCPConnection -LocalPort 8791 -State Listen -ErrorAction SilentlyContinue) { throw 'The app is still running after uninstall.' }
+          if (-not (Test-Path "$data\spaces.json")) { throw 'Uninstall removed the saved setup.' }
+      - name: Show the logs if something went wrong
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:RUNNER_TEMP/setup-*.log" -ErrorAction SilentlyContinue | ForEach-Object { "==== $($_.Name)"; Get-Content $_ }
+          Get-ChildItem "$env:ProgramData/Venue Router/logs/*" -ErrorAction SilentlyContinue | ForEach-Object { "==== $($_.Name)"; Get-Content $_ }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+  mac:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the package
+        run: node deploy/build-package.js
+      - name: Install it, check it runs, and uninstall it
+        run: |
+          set -euo pipefail
+          PKG="$(ls dist/*.pkg | head -1)"
+          DATA="/Library/Application Support/Venue Router/data"
+          sudo installer -pkg "$PKG" -target /
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -s -m 3 http://localhost:8787/ | grep -q 'Set up Venue Router'; then ok=1; break; fi
+            sleep 1
+          done
+          sudo cat "$DATA/logs/venue-router.log" || true
+          [ "$ok" = 1 ] || { echo "The installed app did not answer with its setup page."; exit 1; }
+          ps -axo user,command | grep '[s]erver.js' | grep -q '^nobody' || { echo "The app is not running as nobody."; ps -axo user,command | grep '[s]erver.js'; exit 1; }
+
+          # Installing again over the top must keep the saved setup and come back up
+          echo '[]' | sudo tee "$DATA/spaces.json" >/dev/null
+          sudo installer -pkg "$PKG" -target /
+          sudo test -f "$DATA/spaces.json" || { echo "Updating removed the saved setup."; exit 1; }
+          ok=0
+          for i in $(seq 1 30); do if curl -s -m 3 -o /dev/null http://localhost:8787/; then ok=1; break; fi; sleep 1; done
+          [ "$ok" = 1 ] || { echo "The app did not come back after updating."; exit 1; }
+
+          sudo "/Library/Application Support/Venue Router/app/uninstall.sh"
+          sleep 2
+          if curl -s -m 3 -o /dev/null http://localhost:8787/; then echo "The app is still running after uninstall."; exit 1; fi
+          sudo test -f "$DATA/spaces.json" || { echo "Uninstall removed the saved setup."; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-package-${{ matrix.runner }}
+          path: dist/*.pkg
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Attach the packages to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Venue Router $TAG" --generate-notes
+          gh release upload "$TAG" packages/* --repo "$GITHUB_REPOSITORY" --clobber

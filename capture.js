@@ -6,6 +6,7 @@
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
+const { args, file: dataFile } = require('./data-dir');
 
 function read(ip) {
   return new Promise((resolve, reject) => {
@@ -44,13 +45,13 @@ function parse(text) {
 
 (async () => {
   let venueCfg = {};
-  try { venueCfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'venue.json'), 'utf8')); } catch (e) {}
-  const routerIp = process.argv[2] || (venueCfg.core || {}).router, switcherIp = process.argv[3] || (venueCfg.core || {}).switcher;
+  try { venueCfg = JSON.parse(fs.readFileSync(dataFile('venue.json'), 'utf8')); } catch (e) {}
+  const routerIp = args[0] || (venueCfg.core || {}).router, switcherIp = args[1] || (venueCfg.core || {}).switcher;
   if (!routerIp || !switcherIp) { console.error('Usage: node capture.js <router-ip> <switcher-ip>'); process.exit(1); }
   const snap = { taken: new Date().toISOString(), rtr: parse(await read(routerIp)), sw: parse(await read(switcherIp)) };
   // Rooms with their own switcher, and where things are, come from venue.json.
   try {
-    const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'venue.json'), 'utf8'));
+    const cfg = JSON.parse(fs.readFileSync(dataFile('venue.json'), 'utf8'));
     snap.places = cfg.places || {}; snap.links = cfg.links || []; snap.rooms = [];
     snap.ties = cfg.ties || null; snap.common = cfg.common || null; snap.names = cfg.niceNames || null;
     for (const r of cfg.rooms || []) {
@@ -60,10 +61,10 @@ function parse(text) {
     }
   } catch (e) { console.log('Rooms not read: ' + e.message); }
   // Floor plan pin positions, if any have been saved. The plan image itself is not embedded.
-  try { snap.floor = { pins: JSON.parse(fs.readFileSync(path.join(__dirname, 'floor.json'), 'utf8')).pins || {}, hasImage: false, v: 0 }; } catch (e) {}
+  try { snap.floor = { pins: JSON.parse(fs.readFileSync(dataFile('floor.json'), 'utf8')).pins || {}, hasImage: false, v: 0 }; } catch (e) {}
   // Spaces set up by an engineer, if any have been saved.
-  try { snap.spaces = JSON.parse(fs.readFileSync(path.join(__dirname, 'spaces.json'), 'utf8')); } catch (e) {}
-  try { snap.prefs = JSON.parse(fs.readFileSync(path.join(__dirname, 'prefs.json'), 'utf8')); } catch (e) {}
+  try { snap.spaces = JSON.parse(fs.readFileSync(dataFile('spaces.json'), 'utf8')); } catch (e) {}
+  try { snap.prefs = JSON.parse(fs.readFileSync(dataFile('prefs.json'), 'utf8')); } catch (e) {}
   // Mix state (what is on each M/E) needs the ATEM's own protocol; atem-read.js reads it once, read-only.
   try {
     const out = require('child_process').execFileSync(process.execPath, [path.join(__dirname, 'atem-read.js'), switcherIp], { encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'ignore'] });
@@ -71,13 +72,13 @@ function parse(text) {
     console.log('Mix state: ' + snap.sw.mix.me.map((m, i) => `ME${i + 1} on ${m.pgm.name}`).join(', '));
   } catch (e) { snap.sw.mix = null; console.log('Mix state not read: ' + e.message.split('\n')[0]); }
   const json = JSON.stringify(snap);
-  fs.writeFileSync(path.join(__dirname, 'venue-snapshot.json'), json);
+  fs.writeFileSync(dataFile('venue-snapshot.json'), json);
   console.log(`Router: ${snap.rtr.model}, ${snap.rtr.inL.length} in, ${snap.rtr.outL.length} out`);
   console.log(`Switcher: ${snap.sw.model}, ${snap.sw.inL.length} in, ${snap.sw.outL.length} out`);
   const html = fs.readFileSync(path.join(__dirname, 'venue-router.html'), 'utf8');
   const re = /(<script id="snap" type="application\/json">)[\s\S]*?(<\/script>)/;
   if (!re.test(html)) { console.error('No snapshot block found in venue-router.html'); process.exit(1); }
-  const outFile = path.join(__dirname, 'venue-snapshot.html');
+  const outFile = dataFile('venue-snapshot.html');
   fs.writeFileSync(outFile, html.replace(re, (_, a, b) => a + json.replace(/</g, '\\u003c') + b));
   console.log('Wrote ' + outFile);
 })().catch(e => { console.error(e.message); process.exit(1); });
