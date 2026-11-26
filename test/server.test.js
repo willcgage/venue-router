@@ -37,6 +37,13 @@ test('the port register is saved, cleaned, and kept from people without the PIN'
   assert.deepEqual(saved.rooms, {}, 'a device that is not set up is ignored');
   assert.equal(saved.rtr.in[5].connected, 'Handheld camera', 'ports that were not sent are left alone');
 
+  // Which ports have wall plates is saved beside the plate patterns, and only as port numbers
+  r = await app.post('/ports', { plates: { inOn: '3-5, 9' } });
+  assert.equal(r.status, 204);
+  assert.deepEqual(app.file('ports.json').plates, { in: 'RTR-IN-{n}', out: 'RTR-OUT-{n}', inOn: '3-5, 9' }, 'the patterns are kept when only the ports are sent');
+  await app.post('/ports', { plates: { outOn: 'none', inOn: '<b>not ports</b>' } });
+  assert.deepEqual(app.file('ports.json').plates, { in: 'RTR-IN-{n}', out: 'RTR-OUT-{n}', outOn: 'none' }, 'anything that is not port numbers is dropped');
+
   r = await app.post('/auth/pin', { pin: '482915' });
   assert.equal(r.status, 204);
   const cookie = r.cookie;
@@ -71,8 +78,8 @@ test('renaming: who may, what is sent, and what is refused', async t => {
   assert.equal(r.status, 401);
   assert.deepEqual(app.rtr.state.writes, [], 'nothing reached the router before an engineer asked');
 
-  // Only the main router
-  r = await app.post('/labels', { dev: 'sw', changes: [rename(1, 'Camera 1', 'Cam 1')] }, { cookie });
+  // Only the main router and the main switcher
+  r = await app.post('/labels', { dev: 'some-room', changes: [rename(1, 'Camera 1', 'Cam 1')] }, { cookie });
   assert.equal(r.status, 422);
 
   // A mixed batch from a signed-in engineer
@@ -102,6 +109,7 @@ test('renaming: who may, what is sent, and what is refused', async t => {
   assert.deepEqual([...new Set(now.writes)].sort(), ['INPUT LABELS', 'OUTPUT LABELS'], 'only label blocks were ever sent');
   assert.deepEqual(app.sw.state.writes, [], 'the switcher was not written to');
   assert.deepEqual(app.sw.state.inL, fixture.switcher().inL);
+  assert.deepEqual(app.atemCalls(), [], 'and nothing was asked of it over its own protocol either');
 
   // The app's own picture follows the router, and the batch is kept for undo
   const eng = await app.feed(cookie), open = await app.feed();
@@ -122,4 +130,95 @@ test('renaming: who may, what is sent, and what is refused', async t => {
   assert.equal(now.outL[6], 'Lobby TV');
   assert.equal(now.inL[4], 'RTR-IN-5 Deck B');
   assert.deepEqual(now.route, before.route);
+});
+
+test('patch panels are saved, cleaned, and kept from people without the PIN', async t => {
+  const app = await startApp();
+  t.after(app.stop);
+
+  let r = await app.post('/panels', [{ id: 'a', name: '  Video patch A ', place: 'Rack room', jacks: [
+    { label: 'TV1', to: 'Lobby TV plate', patch: { dir: 'out', port: 6 } },
+    { label: 'x'.repeat(100), to: 5, patch: { dir: 'sideways', port: 2 } },
+    { patch: { dir: 'in', port: -1 } },
+  ] }, { id: 'a', jacks: 'not a list' }, 'not a panel']);
+  assert.equal(r.status, 204);
+  const saved = app.file('panels.json');
+  assert.equal(saved.length, 3);
+  assert.deepEqual(saved[0], { id: 'a', name: 'Video patch A', place: 'Rack room', jacks: [
+    { label: 'TV1', to: 'Lobby TV plate', patch: { dir: 'out', port: 6 } },
+    { label: 'x'.repeat(40), to: '', patch: null },
+    { label: '', to: '', patch: null },
+  ] });
+  assert.notEqual(saved[1].id, 'a', 'two panels never share an id');
+  assert.equal('normal' in saved[0], false, 'no normal until one is saved');
+
+  // A saved normal is kept as one entry per jack, cleaned the same way as a patch
+  await app.post('/panels', [{ id: 'a', name: 'A', jacks: [{ patch: { dir: 'out', port: 6 } }, {}, {}], normal: [{ dir: 'out', port: 6 }, { dir: 'nowhere', port: 1 }] }]);
+  assert.deepEqual(app.file('panels.json')[0].normal, [{ dir: 'out', port: 6 }, null, null]);
+  await app.post('/panels', saved);
+  assert.equal(saved[1].name, 'Patch panel');
+  assert.deepEqual((await app.feed()).panels[0].jacks[0].patch, { dir: 'out', port: 6 });
+
+  r = await app.post('/auth/pin', { pin: '482915' });
+  const cookie = r.cookie;
+  r = await app.post('/panels', []);
+  assert.equal(r.status, 401, 'no PIN, no save');
+  assert.equal(app.file('panels.json').length, 3);
+  r = await app.post('/panels', [], { cookie });
+  assert.equal(r.status, 204);
+  assert.deepEqual(app.file('panels.json'), []);
+  assert.deepEqual(app.rtr.state.writes, [], 'recording patches must not send anything to the router');
+});
+
+test('renaming switcher inputs: only names, only real inputs, only for an engineer', async t => {
+  const app = await startApp();
+  t.after(app.stop);
+  const sw = (port, from, to) => ({ dir: 'in', port, from, to });
+
+  let r = await app.post('/labels', { dev: 'sw', changes: [sw(1, 'Camera 1', 'Wide')] });
+  assert.equal(r.status, 422, 'no PIN set: refused');
+  r = await app.post('/auth/pin', { pin: '482915' });
+  const cookie = r.cookie;
+  r = await app.post('/labels', { dev: 'sw', changes: [sw(1, 'Camera 1', 'Wide')] });
+  assert.equal(r.status, 401, 'PIN set, not signed in: refused');
+  assert.deepEqual(app.atemCalls(), [], 'nothing reached the switcher before an engineer asked');
+
+  r = await app.post('/labels', { dev: 'sw', changes: [
+    sw(1, 'Camera 1', 'Wide'),
+    sw(3, 'Graphics', 'Lyrics'),
+    sw(2, 'not what the switcher says', 'Close'),         // the list is out of date for this input
+    sw(4, 'Input 4', 'A name that is far too long'),      // over 20 characters
+    sw(5, 'Color Bars', 'Bars'),                          // made by the switcher, not a real input
+    sw(0, 'Black', 'Dark'),                               // likewise
+    { dir: 'out', port: 1, from: 'PGM out', to: 'Main' }, // outputs cannot be renamed from here
+  ] }, { cookie });
+  assert.equal(r.status, 200);
+  const out = JSON.parse(r.text);
+  assert.equal(out.done, 2);
+  // Everything else is reported with a reason
+  assert.deepEqual(out.failed.map(f => f.port).sort(), [0, 1, 2, 4, 5]);
+  assert.deepEqual(app.atemCalls(), [
+    { call: 'setInputSettings', props: { longName: 'Wide' }, input: 1 },
+    { call: 'setInputSettings', props: { longName: 'Lyrics' }, input: 3 },
+  ], 'only the long name is sent, and only for the inputs that passed every check');
+  assert.deepEqual(app.rtr.state.writes, [], 'the router was not written to');
+
+  const eng = await app.feed(cookie);
+  assert.equal(eng.renames[0].dev, 'sw');
+  assert.equal(eng.renames[0].changes.length, 2);
+
+  // A switcher can accept a command and not apply it. That is reported, not counted as done.
+  r = await app.post('/labels', { dev: 'sw', changes: [sw(2, 'Camera 2', 'IGNORED name')] }, { cookie });
+  const ignored = JSON.parse(r.text);
+  assert.equal(ignored.done, 0);
+  assert.match(ignored.failed[0].why, /reports "Camera 2" instead/);
+
+  // Undo is the same request the other way round
+  r = await app.post('/labels', { dev: 'sw', undo: true, changes: eng.renames[0].changes.map(c => ({ dir: c.dir, port: c.port, from: c.to, to: c.from })) }, { cookie });
+  assert.equal(JSON.parse(r.text).done, 2);
+  assert.deepEqual(app.atemCalls().slice(-2), [
+    { call: 'setInputSettings', props: { longName: 'Camera 1' }, input: 1 },
+    { call: 'setInputSettings', props: { longName: 'Graphics' }, input: 3 },
+  ]);
+  assert.ok(app.atemCalls().every(c => c.call === 'setInputSettings' && Object.keys(c.props).join() === 'longName'), 'nothing but input names was ever sent to the switcher');
 });

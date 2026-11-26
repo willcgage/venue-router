@@ -4,7 +4,7 @@ A web console that shows what every screen in a building is displaying and trace
 
 There is no installer yet. See [Download and install](#download-and-install) for the steps to set it up by hand.
 
-**It watches, with one exception.** Nothing in this project changes a route, a lock, a recording or any other setting on a device. Routers and switchers are listened to, and recorders are only asked for their status. Routing changes made in the page are either refused (Live) or pretend (Sandbox). The exception is port names on the main router: an engineer who has entered the PIN can send new names to it from the Ports page, after reviewing and confirming them. See "Renaming on the router" below.
+**It watches, with one exception.** Nothing in this project changes a route, a lock, a recording or any other setting on a device. Routers and switchers are listened to, and recorders are only asked for their status. Routing changes made in the page are either refused (Live) or pretend (Sandbox). The exception is names: an engineer who has entered the PIN can send new port names to the main router and new input names to the main switcher from the Ports page, after reviewing and confirming them. See "Renaming on the router" and "Renaming on the switcher" below.
 
 ## What it does
 
@@ -13,6 +13,7 @@ There is no installer yet. See [Download and install](#download-and-install) for
 - **System map**: every screen and the full chain feeding it: source, router, switcher, router again, screen. Select a screen to follow its picture from source to screen, or a source to see every screen it is on. It can also draw the whole system on one page, every device and how they are cabled, or every input and output of one device (see below).
 - **Floor plan**: screens and equipment pinned on a plan of the building.
 - **Full patch** (Engineer): every router output and what feeds it, plus naming problems worth a look. Select a column heading to sort by it.
+- **Patch panels** (Engineer): a record of the jacks in a rack, where each one goes, and which router port it is patched to. Open jacks are shown, and a patched panel appears as a step in a signal path.
 - **Ports** (Engineer): a register of every port on the router and the switchers: its wall plate, what is plugged in, a status, notes and the name it should carry. It checks every name against a standard, and exports to a spreadsheet and imports back.
 - **Devices**: what is connected, where it is, and what each switcher mix is on.
 
@@ -307,7 +308,7 @@ Without Git, download the ZIP again into a new folder and copy your setup files 
 
 Everything about your venue is in these files. An installed copy keeps them in its data folder (`C:ProgramDataVenue Router` on Windows, `/Library/Application Support/Venue Router/data` on a Mac). A copy installed by hand keeps them inside its own folder. None of them are part of the download, so back them up, and copy them to move to another computer:
 
-`venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `label-history.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
+`venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `panels.json`, `label-history.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
 
 `auth.json` holds the PIN. Leave it behind when moving and set the PIN again.
 
@@ -401,10 +402,10 @@ The hardware knows a port's label and nothing else. The **Ports** page in the En
 
 | Column | What it holds |
 |---|---|
-| Plate | Router only. The name on the wall plate, worked out from the port number. See below |
+| Plate | Router only. The name on the wall plate, for ports that end at one. Empty for everything else. See below |
 | Hardware label | What the device calls the port now. Read from the device, never changed |
 | Should be | The name the port ought to carry, and whether the hardware label matches it |
-| Plate is in | The room and position of the plate |
+| Location | Where the far end of the cable is: a room, a position, a rack |
 | Connected | What is plugged in at the far end. Grey text is what the app already knows from ties and the Devices page |
 | Status | Spare, Not working or Planned |
 | Right now | What an output is showing, or how many outputs an input feeds |
@@ -414,7 +415,12 @@ Select **Edit** on a row to fill it in, and a column heading to sort. A switcher
 
 #### Wall plates and the standard name
 
-If the plates in the building are marked with the router port they are wired to, enter how they are written, with `{n}` where the port number goes: `RTR-IN-{n}` for inputs and `RTR-OUT-{n}` for outputs. Two things follow.
+Some router ports end at a plate on a wall, and the rest go to equipment in the rack. The **Wall plates** card at the top of the Ports page holds two things for each direction:
+
+- **How the plates are marked**, with `{n}` where the port number goes: `RTR-IN-{n}` for inputs and `RTR-OUT-{n}` for outputs.
+- **Which ports have a plate**, as port numbers and ranges such as `66-96, 113-120`.
+
+You usually only enter the first. The app works out which ports have a plate from their labels: a port already named after its plate (`RTR-IN-66`, `RTR-IN-67 Stage camera`), or one that carries its own port number (`70: Podium`). The card shows what it found, marked "Worked out from the labels". If that is right there is nothing more to do. If a port is missing or should not be there, choose **Change** and edit the ranges, or tick or untick "This port ends at a wall plate" when editing a single port. A port tied to the switcher, a recorder or a converter is never treated as a plate, even inside a range.
 
 A port whose label is only its plate name, such as `RTR-IN-66`, is a plate and not an unnamed port. Once "Connected" is filled in for it, that name is shown across the app in place of the plate name, "Named only" stops hiding it, and Full patch stops listing it under Worth a look.
 
@@ -425,12 +431,13 @@ Setting a plate pattern also switches on the naming standard for that direction.
 | A wall plate | The plate name, then what it is for | `RTR-IN-14 Stage camera` |
 | The switcher | The switcher port, then the switcher's own name for it | `SW IN 5 - Graphics`, `SW Out 2 - Program` |
 | A recorder or converter | Left as it is, because its label names the device port | `REC-IN-01`, `TRNX-OUT-1A` |
+| Anywhere else, such as other equipment in the rack | Just what it is for, with no plate name | `Multiview 1` |
 
 The app knows which is which from the ties in `venue.json` and the cabling on the Devices page.
 
 For a port tied to the switcher, **the switcher's name is the master**. Rename an input on the switcher and the router port that feeds it is marked "Rename" with the new name ready. A switcher port still called "Input 12" or "Output 3" adds nothing, so its router port is just `SW IN 12`.
 
-For a port on a wall plate, the second part comes from "Connected" if you filled it in, and otherwise from the current label with the port number and any status note taken off:
+What a port is for comes from "Connected" if you filled it in, and otherwise from the current label with the port number and any status note taken off. For a port on a wall plate, here input 22, 31, 40 and 14:
 
 | Hardware label | Standard name |
 |---|---|
@@ -470,19 +477,78 @@ What keeps it safe:
 
 Names are limited to 60 plain letters, numbers and punctuation. New names appear on control panels and multiviewers straight away, so a service is not the time to rename.
 
-Only the main router can be renamed from the app. Switcher names are checked here but still changed in ATEM Setup.
+#### Renaming on the switcher
+
+The main switcher's inputs can be renamed the same way. Choose **Switcher** as the device on the Ports page.
+
+1. Choose Edit on an input, enter a **New label** of up to 20 characters, and save. The switcher has no standard name to propose, so only inputs you have given a New label are ever renamed.
+2. Under **Rename on the switcher**, choose "Review renames", untick anything to leave alone, then Rename and confirm.
+
+What is different from the router:
+
+- **Only the name is sent.** That is the input's long name. The four-character short name on the panel buttons is left as it is, and so is what each mix is cut to and every other setting.
+- **Only real inputs.** Black, Color Bars, media players and the mixes are made by the switcher and are not offered. Switcher outputs cannot be renamed from the app.
+- **Names over 20 characters are not offered,** because the switcher cannot hold them. They stay marked "Over 20 characters" in the list.
+- The same safeguards apply: engineers only and a PIN must be set, every rename is reviewed and confirmed, a name that changed on the switcher since the list was made is skipped, the switcher's own report decides what counts as done, and each batch can be undone.
+
+Because the switcher's name is the master for a tie, renaming a switcher input changes what the router port feeding it should be called. After a switcher rename, look at the router's list for the matching "Rename".
+
+Room switchers cannot be renamed from the app. Their names are checked here and changed in ATEM Setup.
 
 #### Spreadsheets
 
 "Export as CSV" saves every port of every device as one file that opens in Excel or Google Sheets, with the proposed name and what needs doing on each row. Edit it there, save it as CSV again, and choose "Import a CSV":
 
 - Rows are matched by the Device, Direction and Port columns, never by their order, so sorting or deleting rows in the spreadsheet is safe. Keep those three columns.
-- Only Plate is in, Connected, Status, Notes and New label are imported. A column left out of the file is left alone.
+- Only Location, Connected, Status, Notes and New label are imported. A column left out of the file is left alone.
 - The page shows every change the file would make and saves nothing until you choose Save.
 - It warns about rows it could not match, a changed Hardware label (put the name you want in New label), and values that look like dates, which is what a spreadsheet does to a name such as `1-2`.
 - Importing an older export puts back what that file held, so export a fresh copy before editing.
 
 The register is saved in `ports.json`. An offline snapshot carries it too, without the notes.
+
+### Patch panels
+
+A patch panel is the row of jacks in a rack where the cables from wall plates meet the router. A short cable from a jack to a router port decides where that port really goes, and nothing in the system can see it. The **Patch panels** page in the Engineer menu is where it is written down.
+
+To record one:
+
+1. Under **Add a patch panel**, enter its name, where it is, and how many jacks it has.
+2. Select a jack, either its square on the panel or its row, and fill in three things:
+
+| Field | What it holds |
+|---|---|
+| Label on the jack | What is printed on the panel, such as `MV01` |
+| Goes to | Where the jack's fixed cable ends, such as "Wall plate behind the lobby TV" |
+| Patched to | The router input or output it is patched to, or "Open, nothing plugged in" |
+
+The panel is drawn as a row of squares, solid for a patched jack and dashed for an open one, and the heading counts the open jacks. "Only open jacks" keeps just those rows. Two jacks recorded on the same router port cannot both be right, so both are marked to check.
+
+What recording a patch does elsewhere:
+
+- On the **Ports** page, the port's "Connected" column says which panel and jack it goes through, and where that jack leads.
+- On the **System map**, a path that enters or leaves through a patched jack shows the panel as its own box, between the source and the router or between the router and the screen.
+- In the map's **Whole system** view, each panel is a box beside the router: on the left for jacks patched to router inputs, on the right for jacks patched to outputs. A panel with both appears on both sides. Select it to list its patches.
+
+#### Normal patching
+
+A panel is usually meant to be patched one way and is changed now and then for an event. To have the app notice:
+
+1. Record the panel as it is meant to be.
+2. Choose **Save as normal**.
+
+From then on, any jack patched differently is marked, whether it was moved, unplugged, or plugged in where nothing normally goes:
+
+- its square on the panel gets an amber edge, and its row says what it normally is;
+- the panel's heading counts them, or says "Patched as normal";
+- Full patch lists the panel under Worth a look;
+- in a signal path and on the Whole system view, the panel is marked and says "Not the normal patch".
+
+When a panel is not as normal there are two choices. **Record as put back** sets the record back to normal, for when the cables in the rack have been moved back. **Make this the new normal** keeps today's patching as the normal from now on. Neither moves a cable; the app only keeps the record.
+
+**Panel settings** renames a panel, changes its place or its number of jacks, or removes it. A panel cannot be made smaller than its last jack with something recorded on it.
+
+This is a record kept by people. If a cable is moved in the rack and not here, the app shows the old patch. It is saved in `panels.json`, and an offline snapshot carries it.
 
 ### Devices
 
@@ -616,7 +682,7 @@ npm test
 
 The tests need no hardware and take a few seconds. They run on every pull request, on Windows, Mac and Linux.
 
-- **The server** is started for real against pretend devices on the same computer (`test/pretend-hub.js` speaks the Videohub protocol). The tests check what it reads, what it saves, who is refused, and exactly what it sends when an engineer renames ports: label blocks only, to the router only, never a route.
+- **The server** is started for real against pretend devices on the same computer (`test/pretend-hub.js` speaks the Videohub protocol). There is no pretend ATEM, so the server is handed a stand-in for the switcher library (`test/stand-in-atem.js`) that records every call made on it. The tests check what it reads, what it saves, who is refused, and exactly what it sends when an engineer renames ports: label blocks only to the router, an input's name only to the switcher, never a route or any other setting.
 - **The page's logic** is loaded outside a browser on a small made-up venue (`test/fixture.js`): following a picture back to its source, the naming standard, cabling read from labels, the whole-system view, sorting, and the spreadsheet round trip.
 
 A device address in `venue.json` may carry a port, as in `127.0.0.1:19990`. That exists so the tests can reach their pretend devices; real devices use the standard port and need none.
@@ -635,7 +701,7 @@ A device address in `venue.json` may carry a port, as in `127.0.0.1:19990`. That
 | `deploy/` | Install scripts for Windows and Mac, and what builds the installers |
 | `.github/workflows/package.yml` | Builds and tests the installers |
 
-Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `auth.json`, `floor.json`, `floor-image.bin`, `normal-service.json`, `config.json`, `logs/`, `venue-snapshot.html`.
+Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `panels.json`, `auth.json`, `floor.json`, `floor-image.bin`, `normal-service.json`, `config.json`, `logs/`, `venue-snapshot.html`.
 
 ## How it reads the hardware
 

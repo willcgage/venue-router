@@ -46,7 +46,10 @@ async function startApp({ ports = fixture.ports() } = {}) {
   fs.writeFileSync(path.join(dir, 'spaces.json'), JSON.stringify(fixture.spaces()));
   if (ports) fs.writeFileSync(path.join(dir, 'ports.json'), JSON.stringify(ports));
   const port = await freePort(), base = 'http://127.0.0.1:' + port;
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js'), '--data=' + dir], { env: { ...process.env, PORT: String(port), HOST: '127.0.0.1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  // The switcher's own protocol has no pretend device, so the server is handed a stand-in for the library that speaks it
+  const atemLog = path.join(dir, 'atem-calls.log');
+  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', VENUE_ATEM_MODULE: path.join(__dirname, 'stand-in-atem.js'), VENUE_TEST_ATEM_INPUTS: JSON.stringify(fixture.switcher().inL), VENUE_TEST_ATEM_LOG: atemLog };
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js'), '--data=' + dir], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   child.stdout.on('data', d => (log += d));
   child.stderr.on('data', d => (log += d));
@@ -60,7 +63,7 @@ async function startApp({ ports = fixture.ports() } = {}) {
   // Ready once the feed has the router's labels in it. If the server stops or never answers, say so and leave nothing running.
   const until = Date.now() + 15000;
   for (;;) {
-    try { const f = await feed(base); if (f.rtr && f.rtr.inL.length) break; } catch (e) {}
+    try { const f = await feed(base); if (f.rtr && f.rtr.inL.length && f.conn.mix) break; } catch (e) {}
     if (exited || Date.now() > until) {
       await cleanUp();
       throw new Error((exited ? 'The server stopped as soon as it started. Has "npm ci" been run?' : 'The server did not start in 15 seconds.') + '\n' + log);
@@ -74,6 +77,8 @@ async function startApp({ ports = fixture.ports() } = {}) {
     post: (url, body, opts) => request(base, 'POST', url, { body, ...opts }),
     feed: cookie => feed(base, cookie),
     file: name => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')),
+    // Every call the server made on the switcher, in order
+    atemCalls: () => (fs.existsSync(atemLog) ? fs.readFileSync(atemLog, 'utf8').split(/\r?\n/).filter(Boolean).map(l => JSON.parse(l)) : []),
     stop: cleanUp,
   };
 }

@@ -48,17 +48,29 @@ test('the standard name follows where the cable goes', () => {
     assert.equal(needsRename(rows, no), false);
   }
 
+  // Which ports are on a wall plate is worked out from the labels until someone says otherwise:
+  // a port already named after its plate, or one carrying its own port number
+  assert.equal(p.portsText(p.platePorts('in')), '3-4, 6, 10-16');
+  assert.equal(p.portsText(p.platePorts('out')), '8, 10-16');
+
   // On a wall plate: the plate, then what it is for
   assert.equal(target(ins, 3), 'RTR-IN-3 Podium', 'a leading port number is dropped');
   assert.equal(target(ins, 4), 'RTR-IN-4 Stage camera');
   assert.equal(needsRename(ins, 4), false);
-  assert.equal(target(ins, 5), 'RTR-IN-5 Playback 2', 'a status note is dropped');
   assert.equal(target(ins, 6), 'RTR-IN-6 Handheld camera', 'what the register says is connected is used');
-  assert.equal(target(ins, 9), 'RTR-IN-9 Camera A');
   assert.equal(target(ins, 10), 'RTR-IN-10');
   assert.equal(needsRename(ins, 10), false);
-  assert.equal(target(outs, 7), 'RTR-OUT-7 Lobby TV');
   assert.equal(target(outs, 8), 'RTR-OUT-8 Foyer');
+  assert.equal(row(outs, 8).plate, 'RTR-OUT-8');
+
+  // Anywhere else, such as equipment in the rack: just what it is for, with no plate name put in front
+  assert.equal(target(ins, 5), 'Playback 2', 'a status note is dropped');
+  assert.equal(needsRename(ins, 5), true);
+  assert.equal(target(ins, 9), 'Camera A');
+  assert.equal(needsRename(ins, 9), false);
+  assert.equal(target(outs, 7), 'Lobby TV');
+  assert.equal(needsRename(outs, 7), false);
+  assert.equal(row(outs, 7).plate, '');
 
   assert.equal(p.renameCount(), ins.concat(outs).filter(r => r.checks.indexOf('Rename') >= 0).length);
   assert.ok(plain(p.findings()).some(f => /not named to the standard/.test(f.t)));
@@ -82,9 +94,28 @@ test('the standard can be overridden, and is off until plates are set', () => {
   assert.equal(off.renameCount(), 0);
   assert.ok(off.portRows('rtr', 'in').every(r => r.target === ''));
 
-  // A port that is not known to feed a recorder is an ordinary plate port
+  // A port not known to feed a recorder, and not on a plate, keeps its own name
   const loose = loadPage(fixture.snapshot({ deviceLinks: false }));
-  assert.equal(target(loose.portRows('rtr', 'out'), 5), 'RTR-OUT-5 REC-IN-01');
+  assert.equal(target(loose.portRows('rtr', 'out'), 5), 'REC-IN-01');
+});
+
+test('an engineer can say which ports have wall plates', () => {
+  const reg = fixture.ports();
+  reg.plates.outOn = '1-7';      // includes ties and a recorder input, which are never plates
+  reg.plates.inOn = 'none';
+  const p = loadPage({ ...fixture.snapshot(), ports: reg });
+  const ins = p.portRows('rtr', 'in'), outs = p.portRows('rtr', 'out');
+  assert.equal(target(outs, 7), 'RTR-OUT-7 Lobby TV', 'a port in the range gets its plate name');
+  assert.equal(target(outs, 8), 'Foyer', 'a port left out of the range loses it, even if its label looks like a plate port');
+  assert.equal(target(outs, 1), 'SW IN 1 - Camera 1', 'a tie stays a tie inside a plate range');
+  assert.equal(row(outs, 1).plate, '');
+  assert.equal(target(outs, 5), 'REC-IN-01', 'a recorder port stays as it is inside a plate range');
+  assert.equal(target(ins, 4), 'Stage camera', 'with no input plates, a plate name is taken off');
+  assert.equal(p.portsText(p.platePorts('in')), '');
+
+  assert.equal(p.portsText(p.parsePorts('66-96, 113–120; 5 5  200 9-7', 120)), '5, 7-9, 66-96, 113-120', 'either dash, any separator, reversed ranges, nothing past the last port');
+  assert.equal(p.portsText(p.parsePorts('none', 120)), '');
+  assert.equal(p.portsText(p.parsePorts('camera, stage', 120)), '');
 });
 
 test('a plate with something recorded on it is a named port', () => {
@@ -158,4 +189,93 @@ test('sorting and port lists read naturally', () => {
   assert.deepEqual(plain(p.sortRows(list, { k: 'v', dir: 1 }, get)).map(get), ['camera 1', 'Camera 2', 'Camera 10', '']);
   assert.deepEqual(plain(p.sortRows(list, { k: 'v', dir: -1 }, get)).map(get), ['Camera 10', 'Camera 2', 'camera 1', ''], 'empty stays last either way');
   assert.equal(p.sortRows(list, null, get), list);
+});
+
+test('a patch panel is one more step in a path, and its open jacks are counted', () => {
+  const panels = [{ id: 'a', name: 'Video patch A', place: 'Rack room', jacks: [
+    { label: 'TV1', to: 'Wall plate behind the lobby TV', patch: { dir: 'out', port: 6 } },   // router out 7, Lobby TV
+    { label: 'STAGE-L', to: 'Stage left floor box', patch: { dir: 'in', port: 8 } },          // router in 9, Camera A
+    { label: 'TV2', to: '', patch: null },
+    { label: '', to: '', patch: { dir: 'out', port: 6 } },                                    // a second jack on the same port
+  ] }];
+  const p = loadPage({ ...fixture.snapshot(), panels });
+
+  assert.equal(p.patchOf('out', 6).jack.label, 'TV1');
+  assert.equal(p.patchOf('out', 9), null);
+  assert.deepEqual(plain(p.panelStats(p.patchOf('out', 6).panel)), { open: 1, clash: 2, diff: 0 });
+
+  // The port list says where a patched port really goes
+  assert.equal(row(p.portRows('rtr', 'out'), 7).auto, 'Video patch A · TV1, to Wall plate behind the lobby TV');
+  assert.equal(row(p.portRows('rtr', 'in'), 9).auto, 'Video patch A · STAGE-L, to Stage left floor box');
+  assert.equal(row(p.portRows('rtr', 'out'), 1).auto, 'Switcher in 1 · Camera 1', 'a tie is still a tie');
+
+  // Foyer (out 8) shows Camera A, which comes in through the panel: source, panel, router, screen
+  const foyer = plain(p.chainBoxes(p.trace(7), { d: 7 }));
+  assert.deepEqual(foyer.map(b => b.title), ['Camera A', 'Video patch A', 'Router', '8: Foyer'].map((t, i) => (i === 3 ? foyer[3].title : t)));
+  assert.deepEqual(foyer[1].lines, ['Jack 2 · STAGE-L', 'To Stage left floor box']);
+  // Lobby TV (out 7) leaves through the panel: the panel is the last step before the screen
+  const lobby = plain(p.chainBoxes(p.trace(6), { d: 6 }));
+  assert.equal(lobby[lobby.length - 2].title, 'Video patch A');
+  assert.deepEqual(lobby[lobby.length - 2].lines, ['Jack 1 · TV1', 'To Wall plate behind the lobby TV']);
+
+  // With no panels recorded, nothing changes
+  const none = loadPage(fixture.snapshot());
+  assert.equal(plain(none.chainBoxes(none.trace(7), { d: 7 })).length, foyer.length - 1);
+});
+
+test('a panel with a saved normal marks every jack that is patched differently', () => {
+  const out = port => ({ dir: 'out', port }), inp = port => ({ dir: 'in', port });
+  const panels = [{ id: 'a', name: 'Video patch A', place: 'Rack room',
+    jacks: [
+      { label: 'TV1', to: 'Lobby TV plate', patch: out(6) },        // as normal
+      { label: 'TV2', to: 'Foyer TV plate', patch: out(8) },        // moved: normally out 8 (index 7)
+      { label: 'TV3', to: '', patch: null },                        // unplugged: normally out 10
+      { label: 'STAGE-L', to: 'Stage left', patch: inp(8) },        // plugged in where nothing normally goes
+      { label: 'SPARE', to: '', patch: null },                      // open, as normal
+    ],
+    normal: [out(6), out(7), out(9), null, null] }];
+  const p = loadPage({ ...fixture.snapshot(), panels });
+  const panel = p.patchOf('out', 6).panel;
+  assert.deepEqual([0, 1, 2, 3, 4].map(k => p.jackDiffers(panel, k)), [false, true, true, true, false]);
+  assert.deepEqual(plain(p.panelStats(panel)), { open: 2, clash: 0, diff: 3 });
+  assert.ok(plain(p.findings()).some(f => f.nav === 'panels' && /Video patch A: 3 jacks are not patched as normal/.test(f.t)));
+
+  // In a path, a jack that is not as normal says so
+  const moved = plain(p.chainBoxes(p.trace(8), { d: 8 }));
+  const box = moved.filter(b => b.title === 'Video patch A')[0];
+  assert.ok(box.lines.indexOf('Not the normal patch') >= 0);
+  assert.equal(box.warn, true);
+  const fine = plain(p.chainBoxes(p.trace(6), { d: 6 })).filter(b => b.title === 'Video patch A')[0];
+  assert.equal(fine.lines.indexOf('Not the normal patch'), -1);
+
+  // Until a normal is saved, nothing is marked
+  const unsaved = loadPage({ ...fixture.snapshot(), panels: [{ ...panels[0], normal: undefined }] });
+  assert.equal(unsaved.panelStats(unsaved.patchOf('out', 6).panel).diff, 0);
+  assert.ok(!plain(unsaved.findings()).some(f => f.nav === 'panels'));
+});
+
+test('patch panels are drawn on the whole-system view, on the side their patches are on', () => {
+  const panels = [{ id: 'a', name: 'Video patch A', place: 'Rack room', jacks: [
+    { label: 'TV1', to: 'Lobby TV plate', patch: { dir: 'out', port: 6 } },
+    { label: 'TV2', to: '', patch: { dir: 'out', port: 7 } },
+    { label: 'STAGE-L', to: 'Stage left', patch: { dir: 'in', port: 8 } },
+    { label: 'SPARE', to: '', patch: null },
+  ], normal: [{ dir: 'out', port: 6 }, null, { dir: 'in', port: 8 }, null] }, { id: 'b', name: 'Empty panel', place: '', jacks: [{ label: '', to: '', patch: null }] }];
+  const m = loadPage({ ...fixture.snapshot(), panels }).sysModel();
+  const left = plain(m.L.filter(b => b.title === 'Video patch A')), right = plain(m.R.filter(b => b.title === 'Video patch A'));
+  assert.equal(left.length, 1);
+  assert.equal(right.length, 1);
+  assert.equal(left[0].ret, 'In 9');
+  assert.equal(left[0].feed, undefined);
+  assert.equal(right[0].feed, 'Out 7, 8');
+  assert.equal(right[0].warn, true, 'TV2 is not as normal');
+  assert.equal(left[0].warn, false);
+  assert.ok(right[0].lines.some(l => /1 jack is not as normal/.test(l)));
+  assert.ok(right[0].lines.some(l => /1 jack open/.test(l)));
+  assert.equal(right[0].detail.length, 2);
+  assert.ok(!plain(m.L.concat(m.R)).some(b => b.title === 'Empty panel'), 'a panel with nothing patched has nothing to draw');
+
+  // An input that comes in through a panel is shown on the panel, not counted again as a loose source
+  const without = loadPage(fixture.snapshot()).sysModel();
+  assert.equal(parseInt(m.L[0].title, 10), parseInt(without.L[0].title, 10) - 1);
 });

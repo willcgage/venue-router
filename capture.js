@@ -72,6 +72,7 @@ function parse(text) {
     const dev = d => ({ in: bare(d && d.in), out: bare(d && d.out) });
     snap.ports = { plates: reg.plates || {}, rtr: dev(reg.rtr), sw: dev(reg.sw), rooms: Object.fromEntries(Object.entries(reg.rooms || {}).map(([id, d]) => [id, dev(d)])) };
   } catch (e) {}
+  try { snap.panels = JSON.parse(fs.readFileSync(dataFile('panels.json'), 'utf8')); } catch (e) {}
   try { snap.version = String(require('./package.json').version || ''); } catch (e) {}
   // Mix state (what is on each M/E) needs the ATEM's own protocol; atem-read.js reads it once, read-only.
   try {

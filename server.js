@@ -1,5 +1,6 @@
-// Live server for Venue Router. It watches, with one exception: an engineer can rename ports on the main router
-// (see setLabels and the /labels route). It never changes a route, a lock or any other setting on any device.
+// Live server for Venue Router. It watches, with one exception: an engineer can rename ports on the main router and
+// inputs on the main switcher (see setLabels, renameSwitcherInputs and the /labels route). It never changes a route,
+// a lock, what a mix is cut to, or any other setting on any device.
 // Holds one connection to the router and two to the ATEM (routing and mix state), and pushes every change to the page.
 // It never changes a device. Routers and switchers are only listened to. HyperDeck recorders are asked for their
 // status, because they report nothing unless asked. Teranex converters and SmartView monitors are only listened to.
@@ -13,7 +14,8 @@ const net = require('net');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { Atem } = require('atem-connection');
+// The tests swap in a stand-in for the switcher library, because there is no pretend ATEM to connect to.
+const { Atem } = require(process.env.VENUE_ATEM_MODULE || 'atem-connection');
 const crypto = require('crypto');
 const { DATA, args, file: dataFile } = require('./data-dir');
 
@@ -522,7 +524,11 @@ function cleanPorts(raw) {
     return out;
   };
   const dev = d => ({ in: side(d && d.in), out: side(d && d.out) });
-  const out = { plates: { in: text(raw && raw.plates && raw.plates.in, 40), out: text(raw && raw.plates && raw.plates.out, 40) }, rtr: dev(raw && raw.rtr), sw: dev(raw && raw.sw), rooms: {} };
+  // inOn and outOn say which ports end at a wall plate, as ranges such as "66-96, 113-120", or "none". Left out, the page works it out from the labels.
+  const on = v => { const t = text(v, 600).replace(/[\u2013\u2014]/g, '-'); return /^none$/i.test(t) ? 'none' : /^[\d\s,;-]+$/.test(t) ? t : null; };
+  const pl = (raw && raw.plates) || {};
+  const out = { plates: { in: text(pl.in, 40), out: text(pl.out, 40) }, rtr: dev(raw && raw.rtr), sw: dev(raw && raw.sw), rooms: {} };
+  for (const k of ['inOn', 'outOn']) { const v = on(pl[k]); if (v) out.plates[k] = v; }
   for (const id of Object.keys((raw && raw.rooms) || {}).slice(0, 60)) {
     if (!/^[\w-]{1,60}$/.test(id)) continue;
     const d = dev(raw.rooms[id]);
@@ -539,13 +545,73 @@ function publicPorts() {
 let ports = cleanPorts(null);
 try { ports = cleanPorts(JSON.parse(fs.readFileSync(PORTS_FILE, 'utf8'))); } catch (e) {}
 
+// Patch panels: a record, kept by people, of the jacks in a rack and which router port each is patched to.
+const PANELS_FILE = dataFile('panels.json');
+function cleanPanels(raw) {
+  const text = (v, max) => (typeof v === 'string' ? v : '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : []).slice(0, 40).map((p, i) => {
+    let id = p && typeof p.id === 'string' && /^[\w-]{1,40}$/.test(p.id) ? p.id : 'panel-' + (i + 1);
+    while (seen.has(id)) id += '-2';
+    seen.add(id);
+    const patch = pt => (pt && (pt.dir === 'in' || pt.dir === 'out') && Number.isInteger(pt.port) && pt.port >= 0 && pt.port < 1000 ? { dir: pt.dir, port: pt.port } : null);
+    const jacks = (p && Array.isArray(p.jacks) ? p.jacks : []).slice(0, 200).map(j => ({ label: text(j && j.label, 40), to: text(j && j.to, 80), patch: patch(j && j.patch) }));
+    const out = { id, name: text(p && p.name, 60) || 'Patch panel', place: text(p && p.place, 60), jacks };
+    // normal is how the panel is meant to be patched, one entry per jack. It is only there once someone has saved it.
+    if (p && Array.isArray(p.normal)) out.normal = jacks.map((_, k) => patch(p.normal[k]));
+    return out;
+  });
+}
+let panels = [];
+try { panels = cleanPanels(JSON.parse(fs.readFileSync(PANELS_FILE, 'utf8'))); } catch (e) {}
+
 // Renames sent to the router, newest first, so the last few can be undone. Each is { id, t, undo, changes: [{dir, port, from, to}] }.
 const LABELS_FILE = dataFile('label-history.json');
 let labelHistory = [];
 try { const lh = JSON.parse(fs.readFileSync(LABELS_FILE, 'utf8')); if (Array.isArray(lh)) labelHistory = lh.slice(0, 20); } catch (e) {}
+function keepRenames(dev, done, undo) {
+  if (!done.length) return;
+  labelHistory.unshift({ id: Date.now().toString(36), t: new Date().toISOString(), dev, undo: !!undo, changes: done });
+  labelHistory = labelHistory.slice(0, 20);
+  fs.writeFileSync(LABELS_FILE, JSON.stringify(labelHistory, null, 1));
+  const what = dev === 'sw' ? (done.length === 1 ? ' switcher input' : ' switcher inputs') : (done.length === 1 ? ' router port' : ' router ports');
+  log('An engineer renamed ' + done.length + what + (undo ? ' (undoing an earlier rename).' : '.'));
+}
+// Names on the main switcher go through its own protocol, and only one thing is ever sent: an input's long name.
+// The short name on the panel buttons, what each mix is cut to, and every other setting are left alone.
+async function renameSwitcherInputs(body) {
+  if (!mixUp || !atem.state) throw new Error('The switcher is not answering.');
+  const cb = sw.inL.indexOf('Color Bars'), last = cb > 1 ? cb - 1 : sw.inL.length - 1;
+  const now = port => { const i = atem.state.inputs && atem.state.inputs[port]; return i && typeof i.longName === 'string' ? i.longName : sw.inL[port]; };
+  const asked = Array.isArray(body.changes) ? body.changes.slice(0, 200) : [], good = [], failed = [], seen = new Set();
+  for (const c of asked) {
+    if (!c || !Number.isInteger(c.port) || seen.has(c.dir + c.port)) continue;
+    seen.add(c.dir + c.port);
+    const to = typeof c.to === 'string' ? c.to.trim() : '', one = { dir: 'in', port: c.port, from: now(c.port), to };
+    if (c.dir !== 'in' || c.port < 1 || c.port > last) failed.push({ ...one, why: 'Only the switcher\'s real inputs can be renamed from here.' });
+    else if (typeof c.from !== 'string' || c.from !== now(c.port)) failed.push({ ...one, why: 'The name on the switcher changed since the list was made.' });
+    else if (!to || to.length > 20 || !/^[\x20-\x7e]+$/.test(to)) failed.push({ ...one, why: 'Use 1 to 20 plain letters, numbers and punctuation.' });
+    else if (to !== now(c.port)) good.push(one);
+  }
+  if (!good.length && !failed.length) throw new Error('There was nothing to rename.');
+  for (const c of good) {
+    const sent = atem.setInputSettings({ longName: c.to }, c.port);
+    await Promise.race([sent, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 5000))]).catch(() => {});
+  }
+  // The switcher reports its inputs back on its own. Keep only what it really took.
+  for (let i = 0; i < 30 && good.some(c => now(c.port) !== c.to); i++) await new Promise(r => setTimeout(r, 100));
+  const done = good.filter(c => now(c.port) === c.to);
+  good.filter(c => now(c.port) !== c.to).forEach(c => failed.push({ ...c, why: 'The switcher reports "' + now(c.port) + '" instead.' }));
+  keepRenames('sw', done, body.undo);
+  return { done: done.length, failed };
+}
+async function renamePorts(body) {
+  if (!authCfg) throw new Error('Set an Engineer PIN before renaming, so that only someone who has entered it can change a device.');
+  if (body && body.dev === 'sw') return renameSwitcherInputs(body);
+  if (!body || body.dev !== 'rtr') throw new Error('Only the main router and the main switcher can be renamed from here.');
+  return renameRouterPorts(body);
+}
 async function renameRouterPorts(body) {
-  if (!authCfg) throw new Error('Set an Engineer PIN before renaming ports, so that only someone who has entered it can change the router.');
-  if (!body || body.dev !== 'rtr') throw new Error('Only the main router can be renamed from here.');
   if (!rtr.up) throw new Error('The router is not answering.');
   const asked = Array.isArray(body.changes) ? body.changes.slice(0, 500) : [], good = [], failed = [], seen = new Set();
   for (const c of asked) {
@@ -568,16 +634,11 @@ async function renameRouterPorts(body) {
   for (let i = 0; i < 30 && good.some(c => now(c) !== c.to); i++) await new Promise(r => setTimeout(r, 100));
   const done = good.filter(c => now(c) === c.to);
   good.filter(c => now(c) !== c.to).forEach(c => failed.push({ ...c, why: 'The router reports "' + now(c) + '" instead.' }));
-  if (done.length) {
-    labelHistory.unshift({ id: Date.now().toString(36), t: new Date().toISOString(), undo: !!body.undo, changes: done });
-    labelHistory = labelHistory.slice(0, 20);
-    fs.writeFileSync(LABELS_FILE, JSON.stringify(labelHistory, null, 1));
-    log('An engineer renamed ' + done.length + (done.length === 1 ? ' router port' : ' router ports') + (body.undo ? ' (undoing an earlier rename).' : '.'));
-  }
+  keepRenames('rtr', done, body.undo);
   return { done: done.length, failed };
 }
 
-const GUARDED = ['/normal', '/spaces', '/prefs', '/devices', '/floor-image', '/floor-pins', '/ports', '/labels'];
+const GUARDED = ['/normal', '/spaces', '/prefs', '/devices', '/floor-image', '/floor-pins', '/ports', '/labels', '/panels'];
 
 const clients = new Map();
 let lastBody = '', lastJson = null, lastPublic = null, timer = null;
@@ -602,7 +663,7 @@ function push() {
     places: venue.places, links: venue.links, addr: { rtr: core.router, sw: core.switcher },
     ties: venue.ties || null, common: venue.common || null, names: venue.niceNames || null,
     floor: { pins: floor.pins, hasImage: !!floor.imageType, v: floor.v },
-    spaces, prefs, ports, renames: labelHistory.slice(0, 5),
+    spaces, prefs, ports, panels, renames: labelHistory.slice(0, 5),
     decks: decks.map(d => ({ id: d.id, place: d.place, ip: d.ip, feed: d.feed, returns: d.returns, ...d.st, up: d.st.up })),
     convs: convs.map(c => ({ id: c.id, place: c.place, ip: c.ip, feeds: c.feeds, returns: c.returns, ...c.st, up: c.st.up })),
     mons: mons.map(m => ({ id: m.id, place: m.place, ip: m.ip, feeds: m.feeds, ...m.st, up: m.st.up })),
@@ -909,9 +970,17 @@ http.createServer((req, res) => {
     return;
   }
   if (url === '/labels' && req.method === 'POST') {
-    readBody(req, 256 * 1024).then(buf => renameRouterPorts(JSON.parse(buf.toString('utf8'))))
+    readBody(req, 256 * 1024).then(buf => renamePorts(JSON.parse(buf.toString('utf8'))))
       .then(out => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(out)); lastBody = ''; push(); })
       .catch(e => { res.writeHead(422, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(e && e.message ? e.message : 'That did not work.'); });
+    return;
+  }
+  if (url === '/panels' && req.method === 'POST') {
+    readBody(req, 512 * 1024).then(buf => {
+      panels = cleanPanels(JSON.parse(buf.toString('utf8')));
+      fs.writeFileSync(PANELS_FILE, JSON.stringify(panels, null, 1));
+      res.writeHead(204); res.end(); push();
+    }).catch(() => { res.writeHead(400); res.end('Bad patch panel list'); });
     return;
   }
   if (url === '/ports' && req.method === 'POST') {
@@ -920,7 +989,7 @@ http.createServer((req, res) => {
     readBody(req, 512 * 1024).then(buf => {
       const raw = JSON.parse(buf.toString('utf8')) || {};
       const next = JSON.parse(JSON.stringify(ports));
-      if (raw.plates) next.plates = raw.plates;
+      if (raw.plates && typeof raw.plates === 'object') next.plates = { ...next.plates, ...raw.plates };
       for (const e of Array.isArray(raw.set) ? raw.set.slice(0, 2000) : []) {
         if (!e || (e.dir !== 'in' && e.dir !== 'out') || !Number.isInteger(e.port)) continue;
         const dev = e.dev === undefined || e.dev === 'rtr' ? next.rtr : e.dev === 'sw' ? next.sw : rooms.some(r => r.id === e.dev) ? (next.rooms[e.dev] = next.rooms[e.dev] || { in: {}, out: {} }) : null;
