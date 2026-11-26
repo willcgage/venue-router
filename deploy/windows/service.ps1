@@ -25,7 +25,7 @@ $data = Join-Path $env:ProgramData 'Venue Router'
 $logs = Join-Path $data 'logs'
 $configFile = Join-Path $data 'config.json'
 $nodeExe = Join-Path $AppDir 'node.exe'
-$setupFiles = 'venue.json', 'spaces.json', 'prefs.json', 'auth.json', 'floor.json', 'floor-image.bin', 'normal-service.json'
+$setupFiles = 'venue.json', 'spaces.json', 'prefs.json', 'ports.json', 'auth.json', 'floor.json', 'floor-image.bin', 'normal-service.json'
 
 function Write-Utf8([string]$Path, [string]$Text) { [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding $false)) }
 

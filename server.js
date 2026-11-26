@@ -489,7 +489,44 @@ function startSession(res) {
   res.setHeader('Set-Cookie', `vr_eng=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}`);
 }
 const clearCookie = res => res.setHeader('Set-Cookie', 'vr_eng=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
-const GUARDED = ['/normal', '/spaces', '/prefs', '/devices', '/floor-image', '/floor-pins'];
+// The port register: what the app cannot read from the hardware about each router port. Where its wall plate is,
+// what is plugged in there, a status, notes, and the label the port should carry. plates holds the pattern printed
+// on the plates, such as "RTR-IN-{n}", so a port whose label is just its plate name is not mistaken for unnamed.
+const PORTS_FILE = dataFile('ports.json');
+let VERSION = '';
+try { VERSION = String(require('./package.json').version || ''); } catch (e) {}
+const PORT_STATUS = ['', 'spare', 'fault', 'future'];
+function cleanPorts(raw) {
+  const text = (v, max) => (typeof v === 'string' ? v : '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
+  const side = src => {
+    const out = {};
+    for (const k of Object.keys(src || {})) {
+      const n = +k, p = src[k] || {};
+      if (!(Number.isInteger(n) && n >= 0 && n < 1000)) continue;
+      const e = { room: text(p.room, 60), connected: text(p.connected, 60), status: PORT_STATUS.includes(p.status) ? p.status : '', notes: text(p.notes, 200), want: text(p.want, 60) };
+      if (e.room || e.connected || e.status || e.notes || e.want) out[n] = e;
+    }
+    return out;
+  };
+  const dev = d => ({ in: side(d && d.in), out: side(d && d.out) });
+  const out = { plates: { in: text(raw && raw.plates && raw.plates.in, 40), out: text(raw && raw.plates && raw.plates.out, 40) }, rtr: dev(raw && raw.rtr), sw: dev(raw && raw.sw), rooms: {} };
+  for (const id of Object.keys((raw && raw.rooms) || {}).slice(0, 60)) {
+    if (!/^[\w-]{1,60}$/.test(id)) continue;
+    const d = dev(raw.rooms[id]);
+    if (Object.keys(d.in).length || Object.keys(d.out).length) out.rooms[id] = d;
+  }
+  return out;
+}
+// Notes are for engineers. Everyone else gets the names without them.
+function publicPorts() {
+  const strip = m => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { ...v, notes: '' }]));
+  const dev = d => ({ in: strip(d.in), out: strip(d.out) });
+  return { plates: ports.plates, rtr: dev(ports.rtr), sw: dev(ports.sw), rooms: Object.fromEntries(Object.entries(ports.rooms).map(([id, d]) => [id, dev(d)])) };
+}
+let ports = cleanPorts(null);
+try { ports = cleanPorts(JSON.parse(fs.readFileSync(PORTS_FILE, 'utf8'))); } catch (e) {}
+
+const GUARDED = ['/normal', '/spaces', '/prefs', '/devices', '/floor-image', '/floor-pins', '/ports'];
 
 const clients = new Map();
 let lastBody = '', lastJson = null, lastPublic = null, timer = null;
@@ -510,11 +547,11 @@ function push() {
   ndis.forEach(n => { ups['NDI converter ' + (n.name || n.id)] = n.st.up; });
   for (const k of Object.keys(ups)) { if (upSeen[k] !== undefined && upSeen[k] !== ups[k]) log(k + (ups[k] ? ' is answering again.' : ' stopped answering.')); upSeen[k] = ups[k]; }
   const strip = ({ up, ...rest }) => rest;
-  const data = { rtr: strip(rtr), sw: { ...strip(sw), mix }, conn: { rtr: rtr.up, sw: sw.up, mix: mixUp }, normal, pin: !!authCfg,
+  const data = { version: VERSION, rtr: strip(rtr), sw: { ...strip(sw), mix }, conn: { rtr: rtr.up, sw: sw.up, mix: mixUp }, normal, pin: !!authCfg,
     places: venue.places, links: venue.links, addr: { rtr: core.router, sw: core.switcher },
     ties: venue.ties || null, common: venue.common || null, names: venue.niceNames || null,
     floor: { pins: floor.pins, hasImage: !!floor.imageType, v: floor.v },
-    spaces, prefs,
+    spaces, prefs, ports,
     decks: decks.map(d => ({ id: d.id, place: d.place, ip: d.ip, feed: d.feed, returns: d.returns, ...d.st, up: d.st.up })),
     convs: convs.map(c => ({ id: c.id, place: c.place, ip: c.ip, feeds: c.feeds, returns: c.returns, ...c.st, up: c.st.up })),
     mons: mons.map(m => ({ id: m.id, place: m.place, ip: m.ip, feeds: m.feeds, ...m.st, up: m.st.up })),
@@ -526,7 +563,7 @@ function push() {
   // Device addresses only go to engineers. Everyone else gets the same state without them.
   const taken = '{"taken":"' + new Date().toISOString() + '",';
   lastJson = taken + body.slice(1);
-  lastPublic = taken + JSON.stringify({ ...data, addr: {}, rooms: data.rooms.map(({ ip, ...r }) => r), decks: data.decks.map(({ ip, ...d }) => d), convs: data.convs.map(({ ip, ...c }) => c), mons: data.mons.map(({ ip, ...m }) => m), ndis: data.ndis.map(({ ip, ...n }) => n) }).slice(1);
+  lastPublic = taken + JSON.stringify({ ...data, addr: {}, ports: publicPorts(), rooms: data.rooms.map(({ ip, ...r }) => r), decks: data.decks.map(({ ip, ...d }) => d), convs: data.convs.map(({ ip, ...c }) => c), mons: data.mons.map(({ ip, ...m }) => m), ndis: data.ndis.map(({ ip, ...n }) => n) }).slice(1);
   for (const [res, eng] of clients) res.write('data: ' + (eng ? lastJson : lastPublic) + '\n\n');
 }
 
@@ -818,6 +855,24 @@ http.createServer((req, res) => {
       fs.writeFileSync(SPACES_FILE, JSON.stringify(spaces, null, 1));
       res.writeHead(204); res.end(); push();
     }).catch(() => { res.writeHead(400); res.end('Bad spaces'); });
+    return;
+  }
+  if (url === '/ports' && req.method === 'POST') {
+    // { plates?: {in,out}, set?: [{dev, dir, port, room, connected, status, notes, want}] }. dev is "rtr" (the default), "sw" or a
+    // room switcher's id. Each entry replaces that port's record.
+    readBody(req, 512 * 1024).then(buf => {
+      const raw = JSON.parse(buf.toString('utf8')) || {};
+      const next = JSON.parse(JSON.stringify(ports));
+      if (raw.plates) next.plates = raw.plates;
+      for (const e of Array.isArray(raw.set) ? raw.set.slice(0, 2000) : []) {
+        if (!e || (e.dir !== 'in' && e.dir !== 'out') || !Number.isInteger(e.port)) continue;
+        const dev = e.dev === undefined || e.dev === 'rtr' ? next.rtr : e.dev === 'sw' ? next.sw : rooms.some(r => r.id === e.dev) ? (next.rooms[e.dev] = next.rooms[e.dev] || { in: {}, out: {} }) : null;
+        if (dev) dev[e.dir][e.port] = e;
+      }
+      ports = cleanPorts(next);
+      fs.writeFileSync(PORTS_FILE, JSON.stringify(ports, null, 1));
+      res.writeHead(204); res.end(); push();
+    }).catch(() => { res.writeHead(400); res.end('Bad port list'); });
     return;
   }
   if (url === '/prefs' && req.method === 'POST') {

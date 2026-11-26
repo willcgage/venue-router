@@ -65,6 +65,14 @@ function parse(text) {
   // Spaces set up by an engineer, if any have been saved.
   try { snap.spaces = JSON.parse(fs.readFileSync(dataFile('spaces.json'), 'utf8')); } catch (e) {}
   try { snap.prefs = JSON.parse(fs.readFileSync(dataFile('prefs.json'), 'utf8')); } catch (e) {}
+  // The port register: plates, what is connected and the names ports should carry. Notes stay out of a file that may be passed on.
+  try {
+    const reg = JSON.parse(fs.readFileSync(dataFile('ports.json'), 'utf8'));
+    const bare = m => Object.fromEntries(Object.entries(m || {}).map(([k, v]) => [k, { ...v, notes: '' }]));
+    const dev = d => ({ in: bare(d && d.in), out: bare(d && d.out) });
+    snap.ports = { plates: reg.plates || {}, rtr: dev(reg.rtr), sw: dev(reg.sw), rooms: Object.fromEntries(Object.entries(reg.rooms || {}).map(([id, d]) => [id, dev(d)])) };
+  } catch (e) {}
+  try { snap.version = String(require('./package.json').version || ''); } catch (e) {}
   // Mix state (what is on each M/E) needs the ATEM's own protocol; atem-read.js reads it once, read-only.
   try {
     const out = require('child_process').execFileSync(process.execPath, [path.join(__dirname, 'atem-read.js'), switcherIp], { encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'ignore'] });

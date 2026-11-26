@@ -7,6 +7,7 @@ venue.json
 # Saved by the running app: spaces, floor plan, Normal service, and the last snapshot
 spaces.json
 prefs.json
+ports.json
 auth.json
 floor.json
 floor-image.bin

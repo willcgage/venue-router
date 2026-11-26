@@ -13,6 +13,7 @@ There is no installer yet. See [Download and install](#download-and-install) for
 - **System map**: every screen and the full chain feeding it: source, router, switcher, router again, screen. Select a screen to follow its picture from source to screen, or a source to see every screen it is on. It can also draw the whole system on one page, every device and how they are cabled, or every input and output of one device (see below).
 - **Floor plan**: screens and equipment pinned on a plan of the building.
 - **Full patch** (Engineer): every router output and what feeds it, plus naming problems worth a look. Select a column heading to sort by it.
+- **Ports** (Engineer): a register of every port on the router and the switchers: its wall plate, what is plugged in, a status, notes and the name it should carry. It checks every name against a standard, and exports to a spreadsheet and imports back.
 - **Devices**: what is connected, where it is, and what each switcher mix is on.
 
 ### Volunteer and Engineer
@@ -184,6 +185,8 @@ Then carry on from [Set it up](#6-set-it-up).
 
 ### Updating an installed copy
 
+The version a computer is running is shown at the bottom of the Engineer menu.
+
 Download the newer installer and run it. Your setup is kept.
 
 ### Building the installers
@@ -304,7 +307,7 @@ Without Git, download the ZIP again into a new folder and copy your setup files 
 
 Everything about your venue is in these files. An installed copy keeps them in its data folder (`C:ProgramDataVenue Router` on Windows, `/Library/Application Support/Venue Router/data` on a Mac). A copy installed by hand keeps them inside its own folder. None of them are part of the download, so back them up, and copy them to move to another computer:
 
-`venue.json`, `spaces.json`, `prefs.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
+`venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
 
 `auth.json` holds the PIN. Leave it behind when moving and set the PIN again.
 
@@ -391,6 +394,64 @@ Edited by hand:
 - `links`: which router output (counted from 0) feeds a room, and which input on that room's switcher it lands on. Use `null` if unknown. This can also be set on the Devices page, under each room switcher.
 
 Restart the server after editing `venue.json` by hand.
+
+### Ports
+
+The hardware knows a port's label and nothing else. The **Ports** page in the Engineer menu records the rest, and checks every name against a standard. Choose a device at the top (the router, the switcher or a room switcher), then Inputs or Outputs.
+
+| Column | What it holds |
+|---|---|
+| Plate | Router only. The name on the wall plate, worked out from the port number. See below |
+| Hardware label | What the device calls the port now. Read from the device, never changed |
+| Should be | The name the port ought to carry, and whether the hardware label matches it |
+| Plate is in | The room and position of the plate |
+| Connected | What is plugged in at the far end. Grey text is what the app already knows from ties and the Devices page |
+| Status | Spare, Not working or Planned |
+| Right now | What an output is showing, or how many outputs an input feeds |
+| Notes | Anything else. Only engineers see notes |
+
+Select **Edit** on a row to fill it in, and a column heading to sort. A switcher lists only its real inputs; the pictures it makes itself, from Color Bars on, are not ports.
+
+#### Wall plates and the standard name
+
+If the plates in the building are marked with the router port they are wired to, enter how they are written, with `{n}` where the port number goes: `RTR-IN-{n}` for inputs and `RTR-OUT-{n}` for outputs. Two things follow.
+
+A port whose label is only its plate name, such as `RTR-IN-66`, is a plate and not an unnamed port. Once "Connected" is filled in for it, that name is shown across the app in place of the plate name, "Named only" stops hiding it, and Full patch stops listing it under Worth a look.
+
+Every router port also gets a standard name: **its plate name, then what it is for**, as in `RTR-IN-14 Stage camera`. The second part comes from "Connected" if you filled it in, and otherwise from the current label with the port number and any status note taken off:
+
+| Hardware label | Standard name |
+|---|---|
+| `22: Podium` | `RTR-IN-22 Podium` |
+| `SW IN 5 - Graphics` | `RTR-OUT-5 Graphics` |
+| `Playback 2 (Not Working)` | `RTR-IN-31 Playback 2` (record "Not working" under Status) |
+| `Input 040` | `RTR-IN-40` |
+| `RTR-IN-14 Stage camera` | unchanged, it already matches |
+
+The standard name is shown in grey under "Should be". To give one port a different name, enter it as "New label" when editing; that replaces the standard name for that port.
+
+#### The naming check
+
+- **Rename** marks a port whose hardware label is not the name under "Should be".
+- **Name used twice** marks two ports on a device that would carry the same name.
+- **Over 20 characters** marks a new label on a switcher that is longer than its input names allow.
+- "Only ports to check" keeps just those rows, and the chips above the table count them. Full patch shows the router's total under Worth a look.
+- The switcher and room switchers have no plates, so they are checked only where a new label has been entered.
+- With no plate pattern and no new labels, nothing is checked.
+
+The check tells you what to change. The names themselves are changed in Videohub Setup and ATEM Setup: this page only records and checks, and never changes a name on a device. Router names in this style still work with everything else in the app, including the cabling it reads from labels such as `REC-IN-01`.
+
+#### Spreadsheets
+
+"Export as CSV" saves every port of every device as one file that opens in Excel or Google Sheets, with the proposed name and what needs doing on each row. Edit it there, save it as CSV again, and choose "Import a CSV":
+
+- Rows are matched by the Device, Direction and Port columns, never by their order, so sorting or deleting rows in the spreadsheet is safe. Keep those three columns.
+- Only Plate is in, Connected, Status, Notes and New label are imported. A column left out of the file is left alone.
+- The page shows every change the file would make and saves nothing until you choose Save.
+- It warns about rows it could not match, a changed Hardware label (put the name you want in New label), and values that look like dates, which is what a spreadsheet does to a name such as `1-2`.
+- Importing an older export puts back what that file held, so export a fresh copy before editing.
+
+The register is saved in `ports.json`. An offline snapshot carries it too, without the notes.
 
 ### Devices
 
@@ -529,7 +590,7 @@ The addresses can be left off when `venue.json` already holds them. Opened this 
 | `deploy/` | Install scripts for Windows and Mac, and what builds the installers |
 | `.github/workflows/package.yml` | Builds and tests the installers |
 
-Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.json`, `auth.json`, `floor.json`, `floor-image.bin`, `normal-service.json`, `config.json`, `logs/`, `venue-snapshot.html`.
+Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `auth.json`, `floor.json`, `floor-image.bin`, `normal-service.json`, `config.json`, `logs/`, `venue-snapshot.html`.
 
 ## How it reads the hardware
 
