@@ -10,9 +10,9 @@ There is no installer yet. See [Download and install](#download-and-install) for
 
 - **Overview**: says whether every screen matches a saved "Normal service", and lists the ones that differ.
 - **Rooms**: groups of screens with one-tap presets such as "Lyrics on wall" and "IMAG".
-- **System map**: every screen and the full chain feeding it: source, router, switcher, router again, screen. Select a screen to follow its picture from source to screen, or a source to see every screen it is on. It can also show every input and output of each device (see below).
+- **System map**: every screen and the full chain feeding it: source, router, switcher, router again, screen. Select a screen to follow its picture from source to screen, or a source to see every screen it is on. It can also draw the whole system on one page, every device and how they are cabled, or every input and output of one device (see below).
 - **Floor plan**: screens and equipment pinned on a plan of the building.
-- **Full patch** (Engineer): every router output and what feeds it, plus naming problems worth a look.
+- **Full patch** (Engineer): every router output and what feeds it, plus naming problems worth a look. Select a column heading to sort by it.
 - **Devices**: what is connected, where it is, and what each switcher mix is on.
 
 ### Volunteer and Engineer
@@ -62,13 +62,14 @@ The **Show** selector on the System map chooses what is drawn:
 
 | Show | What it draws |
 |---|---|
+| Whole system: every device | One box per device and the cabling between them. See below |
 | Room screens | The grouped screens and what feeds them |
 | Every router output | All router outputs, traced through the switcher to their source |
 | Router: inputs to outputs | The router by itself, each input joined to the outputs it feeds |
 | Switcher: inputs to outputs | The switcher by itself |
 | A room switcher: inputs to outputs | One entry per room listed in `venue.json` |
 
-The first two views draw the whole chain in five columns: Sources, Router, Switcher, Router, Screens. The first Router column is the crosspoint that feeds the switcher, such as "Router in 41 → out 11". The second is the router input each screen is switched to, such as "Router in 10". A route that never touches the switcher skips the middle columns.
+"Room screens" and "Every router output" draw the whole chain in five columns: Sources, Router, Switcher, Router, Screens. The first Router column is the crosspoint that feeds the switcher, such as "Router in 41 → out 11". The second is the router input each screen is switched to, such as "Router in 10". A route that never touches the switcher skips the middle columns.
 
 These controls go with it:
 
@@ -78,7 +79,21 @@ These controls go with it:
 - **Devices** hides the Router or Switcher columns when you only care about one of them.
 - **Paths** keeps only routes that go through the switcher, or only routes that stay in the router.
 
+- **Column headings** sort the map. Select "Sources" to put screens that share a source next to each other, or "Screens" to put them in name order. Select the same heading again to reverse it, and a third time to go back to the usual order by room.
+
 The map is for looking, not routing. Selecting a port shows what it feeds or what feeds it.
+
+#### The whole system
+
+"Whole system: every device" draws everything the app knows about on one page, with the router in the middle:
+
+- **On the left** are the sources plugged into the router, and the devices that take a feed from it and send one back: the switcher, converters and recorders.
+- **On the right** is everything the router feeds: each space with its screens, each room switcher, each monitor, and any other named outputs.
+- **Lines** are cabling, labelled with router port numbers such as "Out 46, 47" and "In 33, 34". A grey line marked "not set" is a device whose cabling has not been entered yet.
+- **Each box** shows what the device is doing now: what each mix is on, a recorder's state, a converter's formats, what each screen is showing. A dot shows whether the device is answering.
+- NDI converters are drawn with a dashed edge and no line, because the app only knows that they are there.
+
+Select a box to list its connections port by port. From there, "Show its inputs and outputs" opens that device's own view, and "Follow these screens" opens a space's screens.
 
 ### Following a signal path
 
@@ -383,13 +398,25 @@ The **Devices** page in the Engineer menu is where the app's routers and switche
 
 - **Find devices on the network** asks every address on a network who it is and lists the Blackmagic routers and switchers that answer. It reads each device's greeting and sends nothing else. Only private network ranges can be searched.
 - **Add a device by address** adds one directly. The server checks that a router or switcher answers there first.
-- Each device has a "Where it is" box, and room devices have a Remove button. Removing a device only takes it out of the app.
+- The device list is a table: device, type, where it is, address, state and connections. Select a column heading to sort by it.
+- **Edit** opens a device's settings under its row: where it is, how it is cabled to the router, and Remove. Removing a device only takes it out of the app.
+
+#### Cabling
+
+Blackmagic devices do not report what is plugged into them, so the app cannot read cabling from the hardware. What the system does hold is the names on the router's ports, and the app reads those:
+
+- A recorder is matched to labels such as `REC-IN-01` and `REC-OUT-01-1`, a converter to `TRNX-IN-1A` and `TRNX-OUT-1A`, a monitor to a label carrying its room number, and a room switcher to an output named after its room.
+- When the labels point to cabling that is not set yet, the Devices page lists it at the top with one button to fill it all in. Nothing is saved until you choose that.
+- Each device's Edit panel says whether its settings match the labels, or offers what the labels say instead.
+- A device with no matching label is marked "To set" and has to be chosen by hand. So does the input a building feed arrives on at a room switcher, which no label on the router can show.
+
+Naming router ports after the device they go to is what makes this work.
 
 A device is added in one of three ways:
 
 | Added as | What it means |
 |---|---|
-| Room switcher or extra device | Shown as its own space and in the System map's device views. Paths are not traced through it. |
+| Room switcher or extra device | Shown as its own space and on the System map. Its outputs are traced back through the main router once its building feed is set. |
 | Main router | Replaces the current main router. |
 | Main switcher | Replaces the current main switcher. |
 | Recorder (HyperDeck) | Watched for recording status and disk space. See below. |

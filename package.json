@@ -1,6 +1,6 @@
 {
   "name": "venue-router",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Watch-only routing console for a Blackmagic Videohub, ATEM and the devices around them",
   "private": true,
   "license": "MIT",

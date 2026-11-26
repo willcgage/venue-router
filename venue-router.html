@@ -128,6 +128,14 @@ th{text-align:left;font-weight:500;color:var(--ink-3);font-size:12px;padding:8px
 td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
 tbody tr.click{cursor:pointer}
 tbody tr.click:hover{background:var(--surface-2)}
+.thbtn{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;white-space:nowrap}
+.thbtn:hover,th[aria-sort] .thbtn{color:var(--ink)}
+tr.devsel>td{background:var(--brand-soft);border-bottom-color:transparent}
+tr.devedit>td{background:var(--surface-2);padding:14px 16px}
+.devline{align-items:flex-start;margin-bottom:10px}.devline:last-child{margin-bottom:0}
+.devline>*{min-height:36px;display:inline-flex;align-items:center}
+.devk{flex:none;width:200px;font-weight:500;font-size:13px;color:var(--ink)}
+.sysdl{margin:0;display:flex;flex-direction:column;gap:4px;font-size:13px}.sysdl div{display:flex;gap:12px;flex-wrap:wrap}.sysdl dt{flex:none;width:240px;color:var(--ink-2)}.sysdl dd{margin:0;flex:1;min-width:200px}
 td.num{font-family:var(--mono);color:var(--ink-3);width:52px}
 .finds{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 .plan{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface-2)}
@@ -614,6 +622,27 @@ function showPath(d){
   else{mapScope='all';if(plainOut(RT.outL[d]))mapNamed=false}
   go('map')}
 
+/* ---------- sorting and port lists ---------- */
+/* One sort per table: {k:column, dir:1|-1}, or null for the built-in order. Selecting a heading goes up, down, then back to the built-in order. */
+var SORTS={patch:null,dev:null,map:null};
+function natCmp(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'})}
+function sortRows(list,st,get){
+  if(!st)return list;
+  var t=list.map(function(x,i){return {x:x,i:i,v:get(x,st.k)}});
+  t.sort(function(a,b){var ea=a.v===''||a.v==null,eb=b.v===''||b.v==null;if(ea||eb)return ea&&eb?a.i-b.i:ea?1:-1;
+    var c=typeof a.v==='number'&&typeof b.v==='number'?a.v-b.v:natCmp(a.v,b.v);return (st.dir<0?-c:c)||a.i-b.i});
+  return t.map(function(y){return y.x})}
+function sortMark(tbl,k){var st=SORTS[tbl];return st&&st.k===k?(st.dir>0?' ▲':' ▼'):' ↕'}
+function sortTh(tbl,k,label){var st=SORTS[tbl],on=st&&st.k===k;
+  return '<th'+(on?' aria-sort="'+(st.dir>0?'ascending':'descending')+'"':'')+'><button type="button" class="thbtn" data-sort="'+tbl+':'+k+'">'+label+'<span aria-hidden="true">'+sortMark(tbl,k)+'</span></button></th>'}
+function sortClick(spec){var p=spec.split(':'),st=SORTS[p[0]];SORTS[p[0]]=!st||st.k!==p[1]?{k:p[1],dir:1}:st.dir>0?{k:p[1],dir:-1}:null}
+/* [0,1,2,5] becomes "1–3, 6": port numbers as people read them */
+function ranges(a){a=a.slice().sort(function(x,y){return x-y});var out=[],i=0;
+  while(i<a.length){var j=i;while(j+1<a.length&&a[j+1]===a[j]+1)j++;out.push(j>i+1?(a[i]+1)+'–'+(a[j]+1):j>i?(a[i]+1)+', '+(a[j]+1):String(a[i]+1));i=j+1}
+  return out.join(', ')}
+function portNames(labels,a){return a.map(function(i){return (i+1)+' · '+clean(labels[i]||'')}).join(', ')}
+function firstFew(a,n){return a.length>n?a.slice(0,n).concat(['and '+(a.length-n)+' more']):a}
+
 /* ---------- system map ---------- */
 var mapSel=null,mapScope='rooms',mapUnused=false,mapNamed=true,mapQ='';
 function cut(s,n){return s.length>n?s.slice(0,n-1)+'…':s}
@@ -655,6 +684,10 @@ function mapModel(){
   if(needle){
     rows=rows.filter(function(r){return (r.label+' '+Object.keys(r.c).map(function(k){return r.c[k]?r.c[k].label:''}).join(' ')).toLowerCase().indexOf(needle)>=0});
     extra=extra.filter(function(n){return n.label.toLowerCase().indexOf(needle)>=0})}
+  var ms=SORTS.map;
+  if(ms&&(ms.k==='out'||cols.indexOf(ms.k)>=0)){
+    rows=sortRows(rows,ms,function(r,k){var l=k==='out'?r.label:(r.c[k]?r.c[k].label:'');return l.replace(/^\d+ · /,'')});
+    var oneG=dev?dev.name+' outputs':eff==='all'?'Router outputs':'All screens';rows.forEach(function(r){r.g=oneG})}
   var tall={},chips=null,selRow=dev?null:rows.filter(function(r){return r.key===mapSel})[0];
   if(selRow){var pp=pathPorts(selRow.d,pl);selRow.sub=pp.screen;
     if(selRow.c.sw&&pp.mid)tall[selRow.c.sw.key]=pp.mid;
@@ -728,7 +761,101 @@ function chainHtml(boxes){
   var H=y-34+8,n=boxes.length;
   return '<p class="note" style="margin:0 0 10px">'+n+' steps from left to right. Each box is one device, with the port the picture comes in on and the port it leaves on.</p><div class="scroll"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc('The path, in order: '+said.join(', then '))+'" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div>'}
 
+/* ---------- the whole system on one page ---------- */
+/* Every device as one box, with the cabling between them as the app knows it. The router is the centre: things that
+   feed it or loop through it are on the left, and everything it feeds is on the right. */
+function mapOpts(){
+  var opts=[['system','Whole system: every device'],['rooms','Room screens'],['all','Every router output'],['rtr','Router: inputs to outputs'],['sw','Switcher: inputs to outputs']];
+  ROOMS.forEach(function(r){opts.push([r.id,r.place+' switcher: inputs to outputs'])});
+  return opts}
+function sysModel(){
+  var L=[],R=[],inUsed={},outUsed={},c=conn||{},i;
+  var dot=function(up){return LIVE?(up?'ok':'bad'):null};
+  var tagOf=function(place,what){return (place?place+' · ':'')+what};
+  CONVS.forEach(function(cv){(cv.returns||[]).forEach(function(p){inUsed[p]=1});(cv.feeds||[]).forEach(function(p){outUsed[p]=1})});
+  DECKS.forEach(function(k){(k.returns||[]).forEach(function(p){inUsed[p]=1});if(k.feed!=null)outUsed[k.feed]=1});
+  MONS.forEach(function(m){(m.feeds||[]).forEach(function(p){outUsed[p]=1})});
+  LINKS.forEach(function(l){outUsed[l.rtrOut]=1});
+  for(i=0;i<TIE_IN;i++)outUsed[i]=1;
+  var srcs=[];RT.inL.forEach(function(l,n){if(n>=TIE_OUT&&!inUsed[n]&&!plainIn(l))srcs.push(n)});
+  L.push({key:'sys:src',kind:'end',tag:'Plugged into the router',title:srcs.length+' named sources',lines:firstFew(srcs.map(inName),6),ret:srcs.length?srcs.length+' inputs':null,
+    detail:[['On router inputs',portNames(RT.inL,srcs)||'None are named']]});
+  if(TIE_IN||TIE_OUT)L.push({key:'sys:sw',kind:'sw',tag:tagOf(PLACES.sw,SW.model||'Switcher'),title:SW.name||'Switcher',dot:dot(c.sw&&c.mix),open:'sw',
+    lines:SW.mix?SW.mix.me.map(function(m,n){return mixName(n+1)+': '+m.pgm.name}):[SW.inL.length+' inputs, '+SW.outL.length+' outputs'],
+    feed:TIE_IN?'Out 1–'+TIE_IN:null,ret:TIE_OUT?'In 1–'+TIE_OUT:null,
+    detail:[['From the router','Router outputs 1–'+TIE_IN+' arrive on switcher inputs 1–'+TIE_IN],['Back to the router','Switcher outputs 1–'+TIE_OUT+' arrive on router inputs 1–'+TIE_OUT]]});
+  CONVS.forEach(function(cv){var f=cv.feeds||[],r=cv.returns||[],s=convState(cv);
+    L.push({key:'sys:'+cv.id,kind:'sw',tag:tagOf(cv.place,'Converter'),title:convName(cv),dot:dot(cv.up!==false),warn:s.cls==='warn'||s.cls==='bad',lines:[convWork(cv),s.text],
+      feed:f.length?'Out '+ranges(f):'',ret:r.length?'In '+ranges(r):'',
+      detail:[['Fed by router outputs',portNames(RT.outL,f)||'Not set'],['Comes back on router inputs',portNames(RT.inL,r)||'Not set'],['Doing',convWork(cv)]]})});
+  DECKS.forEach(function(k){var r=k.returns||[],s=deckState(k);
+    L.push({key:'sys:'+k.id,kind:'dev',tag:tagOf(k.place,'Recorder'),title:deckName(k),dot:dot(k.up!==false),warn:s.cls==='warn'||s.cls==='bad',lines:[deckLine(k)],
+      feed:k.feed!=null?'Out '+(k.feed+1):'',ret:r.length?'In '+ranges(r):'',
+      detail:[['Records from router output',k.feed!=null?portNames(RT.outL,[k.feed]):'Not set'],['Plays back on router inputs',portNames(RT.inL,r)||'Not set'],['Now',deckLine(k)]]})});
+  var groups=role==='volunteer'?volGroups():GROUPS,rooms=role==='volunteer'?volRooms():ROOMS;
+  groups.forEach(function(g){var nd=g.dests.filter(drifted).length;g.dests.forEach(function(d){outUsed[d]=1});
+    R.push({key:'sys:g:'+g.id,kind:'end',tag:'Space · '+g.dests.length+(g.dests.length===1?' screen':' screens'),title:g.name,warn:nd>0,group:g,
+      lines:firstFew(g.dests.map(function(d){return outName(d)+': '+describe(d).title}),5).concat(nd?[nd+(nd===1?' differs from ':' differ from ')+refName()]:[]),
+      feed:g.dests.length?'Out '+ranges(g.dests):'',
+      detail:g.dests.map(function(d){return ['Router out '+(d+1)+' · '+outName(d),'showing '+describe(d).title]})})});
+  rooms.forEach(function(r){var lk=LINKS.filter(function(l){return l.room===r.id})[0],outs=r.outL.map(function(l,o){return l+': '+(r.inL[r.route[o]]||'not reported')});
+    R.push({key:'sys:'+r.id,kind:'sw',tag:(r.model||'Switcher')+' · room switcher',title:r.place,dot:dot(r.up!==false),open:r.id,
+      lines:[lk?(lk.input!==null&&r.inL[lk.input]!==undefined?'Building feed on input '+lk.input+' · '+r.inL[lk.input]:'Building feed, input not known'):'No building feed set'].concat(firstFew(outs,3)),
+      feed:lk?'Out '+(lk.rtrOut+1):'',
+      detail:[['Building feed',lk?'Router output '+portNames(RT.outL,[lk.rtrOut])+(lk.input!==null&&r.inL[lk.input]!==undefined?', arriving on input '+lk.input+' · '+r.inL[lk.input]:', input not known'):'Not set. Set it on the Devices page.']].concat(outs.map(function(t){var p=t.split(': ');return [p[0],'showing '+p.slice(1).join(': ')]}))})});
+  MONS.forEach(function(m){var f=m.feeds||[];
+    R.push({key:'sys:'+m.id,kind:'end',tag:tagOf(m.place,'Monitor'),title:monName(m),dot:dot(m.up!==false),lines:[m.input?'Showing '+m.input:'Input not reported'],feed:f.length?'Out '+ranges(f):'',
+      detail:[['Fed by router outputs',portNames(RT.outL,f)||'Not set']]})});
+  var other=[];RT.outL.forEach(function(l,o){if(!outUsed[o]&&!plainOut(l))other.push(o)});
+  if(other.length)R.push({key:'sys:other',kind:'end',tag:'Not in a space or device',title:other.length+' other named outputs',lines:firstFew(other.map(function(o){return outName(o)+': '+describe(o).title}),6),feed:other.length+' outputs',
+    detail:other.map(function(o){return ['Router out '+(o+1)+' · '+outName(o),'showing '+describe(o).title]})});
+  if(NDIS.length){var upN=NDIS.filter(function(n){return n.up!==false}).length;
+    R.push({key:'sys:ndi',kind:'ndi',tag:'On the NDI network',title:NDIS.length+(NDIS.length===1?' NDI converter':' NDI converters'),warn:LIVE&&upN<NDIS.length,lines:[LIVE?upN+' of '+NDIS.length+' answering':'Status not known in a snapshot','Status only, not part of a traced path'],feed:null,
+      detail:NDIS.map(function(n){return [ndiName(n),(n.up===false?'not answering':n.signal?'picture '+ndiPicture(n):'answering')]})})}
+  var nl=RT.lock?RT.lock.filter(Boolean).length:0,ndAll=allDests().filter(drifted).length;
+  var rtr={key:'sys:rtr',kind:'rtr',tag:tagOf(PLACES.rtr,RT.model||'Router'),title:RT.name||'Router',dot:dot(!!c.rtr),open:'rtr',
+    lines:[RT.inL.length+' inputs, '+RT.outL.length+' outputs'].concat(nl?[nl+(nl===1?' output locked':' outputs locked')]:[],NORMAL?[ndAll?ndAll+(ndAll===1?' screen differs from ':' screens differ from ')+refName():'Every screen matches '+refName()]:[]),
+    detail:[['Size',RT.inL.length+' inputs, '+RT.outL.length+' outputs'],['Tied to the switcher',TIE_IN||TIE_OUT?'Outputs 1–'+TIE_IN+' go to it and inputs 1–'+TIE_OUT+' come back from it':'Not tied']]};
+  return {L:L,R:R,rtr:rtr}}
+function renderSystem(){
+  var m=sysModel(),W=1200,BW=300,XC=450,XR=900,GAP=14,svg='<defs><marker id="sys-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--brand)"/></marker></defs>',said=[];
+  var all=m.L.concat(m.R,[m.rtr]);
+  if(mapSel&&!all.some(function(b){return b.key===mapSel}))mapSel=null;
+  var bh=function(b){return Math.max(64,48+b.lines.length*17+(b.lines.length?6:0))};
+  var stack=function(list){var y=6;list.forEach(function(b){b.y=y;b.h=bh(b);y+=b.h+GAP});return y-GAP};
+  var H=Math.max(stack(m.L),stack(m.R),bh(m.rtr)+6);
+  m.rtr.y=6;m.rtr.h=H-6;
+  var box=function(b,x){var sel=mapSel===b.key,fill=b.kind==='sw'?'var(--sw-soft)':b.kind==='rtr'?'var(--brand-soft)':b.kind==='ndi'?'var(--surface-2)':'var(--surface)',stroke=sel?'var(--brand)':b.warn?'var(--warn)':b.kind==='sw'?'var(--sw)':b.kind==='rtr'?'var(--brand)':'var(--ink-2)';
+    var s='<g data-map="'+esc(b.key)+'" tabindex="0" role="button" aria-label="'+esc(b.title+', '+b.tag)+'" style="cursor:pointer"><rect x="'+x+'" y="'+b.y+'" width="'+BW+'" height="'+b.h+'" rx="8" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(sel?3:b.warn?2:1.5)+'"'+(b.kind==='ndi'&&!sel?' stroke-dasharray="4 4"':'')+'/>';
+    s+='<text x="'+(x+12)+'" y="'+(b.y+18)+'" font-size="11" font-weight="600" fill="var(--ink-3)">'+esc(cut(b.tag||'',44))+'</text>';
+    s+='<text x="'+(x+12)+'" y="'+(b.y+38)+'" font-size="15" font-weight="600" fill="var(--ink)">'+esc(cut(b.title,32))+'</text>';
+    b.lines.forEach(function(l,k){s+='<text x="'+(x+12)+'" y="'+(b.y+60+k*17)+'" font-size="12" fill="var(--ink-2)">'+esc(cut(l,46))+'</text>'});
+    if(b.dot)s+='<circle cx="'+(x+BW-14)+'" cy="'+(b.y+15)+'" r="5" fill="var(--'+(b.dot==='ok'?'ok':'warn')+')"><title>'+(b.dot==='ok'?'Connected':'Not answering')+'</title></circle>';
+    return s+'</g>'};
+  var wire=function(x1,x2,y,label){var set=label!=='',mid=(x1+x2)/2;
+    return '<path '+(set?'class="flowline" marker-end="url(#sys-arrow)" ':'stroke-dasharray="3 4" ')+'d="M'+x1+' '+y+' H'+(set?(x2>x1?x2-3:x2+3):x2)+'" fill="none" stroke="'+(set?'var(--brand)':'var(--ink-3)')+'" stroke-width="'+(set?2.5:1.5)+'"/><text x="'+mid+'" y="'+(y-6)+'" text-anchor="middle" font-size="11.5" fill="'+(set?'var(--ink)':'var(--ink-3)')+'">'+esc(cut(set?label:'not set',22))+'</text>'};
+  m.L.forEach(function(b){var two=b.feed!==undefined&&b.feed!==null&&b.ret!==undefined&&b.ret!==null;
+    if(b.feed!==undefined&&b.feed!==null)svg+=wire(XC,BW,b.y+(two?24:32),b.feed);
+    if(b.ret!==undefined&&b.ret!==null)svg+=wire(BW,XC,b.y+(two?50:32),b.ret);
+    svg+=box(b,0);said.push(b.title)});
+  m.R.forEach(function(b){if(b.feed!==null&&b.feed!==undefined)svg+=wire(XC+BW,XR,b.y+32,b.feed);svg+=box(b,XR);said.push(b.title)});
+  svg+=box(m.rtr,XC);
+  var h='<div class="field"><label for="map-scope" style="font-weight:500">Show</label><select id="map-scope">'+mapOpts().map(function(o){return '<option value="'+esc(o[0])+'"'+(o[0]===mapScope?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select>';
+  var down=all.filter(function(b){return b.dot==='bad'}).length;
+  h+='<span class="chip">'+all.length+' boxes</span>'+(LIVE?(down?'<span class="chip warn">'+down+' not answering</span>':'<span class="chip ok">Every device is answering</span>'):'')+'</div>';
+  var sel=all.filter(function(b){return b.key===mapSel})[0],dt='<div id="map-detail" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)">';
+  if(sel){dt+='<h2>'+esc(sel.title)+'</h2><p class="note" style="margin:4px 0 8px">'+esc(sel.tag)+'</p><dl class="sysdl">'+sel.detail.map(function(d){return '<div><dt>'+esc(d[0])+'</dt><dd>'+esc(d[1])+'</dd></div>'}).join('')+'</dl><div class="field" style="margin-top:10px">';
+    if(sel.open)dt+='<button type="button" class="btn primary" data-act="sys-open" data-id="'+esc(sel.open)+'">Show its inputs and outputs</button>';
+    if(sel.group)dt+='<button type="button" class="btn primary" data-act="sys-space" data-g="'+esc(sel.group.id)+'">Follow these screens</button>';
+    dt+='<button type="button" class="btn" data-act="mapclear">Clear selection</button></div>'}
+  else dt+='<p class="empty" style="margin:0">This is every device the app knows about and how they are cabled. Select a box to see its connections port by port.</p>';
+  dt+='</div>';
+  h+='<section class="card panel">'+dt+'<div class="scroll"><svg viewBox="0 0 '+W+' '+(H+6)+'" role="group" aria-label="'+esc('Whole system. Feeding or looping through the router: '+m.L.map(function(b){return b.title}).join(', ')+'. Fed by the router: '+m.R.map(function(b){return b.title}).join(', ')+'.')+'" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div>';
+  h+='<p class="note" style="margin-top:12px">The router is in the middle. On the left are the sources plugged into it and the devices that take a feed and send one back. On the right is everything it feeds. Labels on the lines are router port numbers. A grey line marked "not set" is a device whose cabling has not been entered on the Devices page. The lines show cabling, not whether a picture is actually present.</p></section>';
+  $('main').innerHTML=h}
+
 function renderMap(){
+  if(mapScope==='system'){renderSystem();return}
   var m=mapModel(),W=1200,WD=176,X={},hot={},h='',nc=m.cols.length+1,XS=W-WD;
   m.cols.forEach(function(c,i){X[c]=Math.round(i*(W-WD)/(nc-1))});
   if(mapSel&&!m.nodes[mapSel]&&!m.screens.some(function(s){return s.key===mapSel}))mapSel=null;
@@ -749,8 +876,9 @@ function renderMap(){
   edges.sort(function(a,b){return (a.on?1:0)-(b.on?1:0)});
   var titles={src:m.dev?(mapUnused?'Inputs':'Inputs in use'):(mapUnused?'Sources':'Sources in use'),r1:'Router',sw:CONVS.length?'Switcher or converter':'Switcher',r2:'Router'};
   var svg='<defs><marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--brand)"/></marker></defs>';
-  m.cols.forEach(function(c){svg+='<text x="'+X[c]+'" y="14" font-size="13" font-weight="600" fill="var(--ink-2)">'+titles[c]+'</text>'});
-  svg+='<text x="'+XS+'" y="14" font-size="13" font-weight="600" fill="var(--ink-2)">'+(m.dev?'Outputs':mapScope==='all'?'Router outputs':'Screens')+'</text>';
+  var head=function(x,k,t){return '<text x="'+x+'" y="14" font-size="13" font-weight="600" fill="var(--ink-2)" data-sort="map:'+k+'" tabindex="0" role="button" aria-label="Sort by '+esc(t)+'" style="cursor:pointer">'+t+sortMark('map',k)+'</text>'};
+  m.cols.forEach(function(c){svg+=head(X[c],c,titles[c])});
+  svg+=head(XS,'out',m.dev?'Outputs':mapScope==='all'?'Router outputs':'Screens');
   edges.forEach(function(e){var mx=(e.x1+e.x2)/2,x2=e.on?e.x2-3:e.x2,d='M'+e.x1+' '+e.y1+' C'+mx+' '+e.y1+' '+mx+' '+e.y2+' '+x2+' '+e.y2;
     svg+='<path d="'+d+'" fill="none" '+(e.on?'class="flowline" marker-end="url(#flow-arrow)" ':'')+'stroke="'+(e.on?'var(--brand)':e.warn?'var(--warn)':'var(--line-2)')+'" stroke-width="'+(e.on?2.5:e.warn?2:1.25)+'" opacity="'+(any&&!e.on?0.25:1)+'"/><path d="'+d+'" fill="none" stroke="transparent" stroke-width="14" data-map="'+esc(e.k)+'" style="cursor:pointer"/>'});
   edges.forEach(function(e){if(!e.chip)return;var cx=(e.x1+e.x2)/2,cy=(e.y1+e.y2)/2,w=Math.round(e.chip.length*6.6+18);
@@ -761,8 +889,7 @@ function renderMap(){
   m.screens.forEach(function(s){
     if(s.head)svg+='<text x="'+XS+'" y="'+(s.head.y+4)+'" font-size="12" font-weight="600" fill="var(--ink-3)">'+esc(s.head.g)+'</text>';
     svg+=box(s.key,XS,s.y,s.label,s.drift?'warn':'',s.drift?'var(--warn)':NORMAL&&(!m.dev||m.dev.base)?'var(--ok)':'',s.sub)});
-  var opts=[['rooms','Room screens'],['all','Every router output'],['rtr','Router: inputs to outputs'],['sw','Switcher: inputs to outputs']];
-  ROOMS.forEach(function(r){opts.push([r.id,r.place+' switcher: inputs to outputs'])});
+  var opts=mapOpts();
   h+='<div class="field"><label for="map-scope" style="font-weight:500">Show</label><select id="map-scope">'+opts.map(function(o){return '<option value="'+esc(o[0])+'"'+(o[0]===mapScope?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select>';
   if(!m.dev)h+=flowSeg();
   h+='<input type="search" id="map-q" placeholder="Camera 3" aria-label="Filter the map by name" value="'+esc(mapQ)+'">';
@@ -774,7 +901,7 @@ function renderMap(){
   h+='<div class="field"><span class="chip">'+m.screens.length+(m.dev?' outputs':mapScope==='all'?' router outputs':' screens')+'</span><span class="chip">'+nIn+(m.dev?' inputs in use':' sources in use')+'</span>'+(nUn?'<span class="chip">'+nUn+' unused</span>':'')+(nd?'<span class="chip warn">'+nd+(nd===1?' differs from ':' differ from ')+esc(refName())+'</span>':NORMAL?'<span class="chip ok">All match Normal service</span>':'<span class="chip">No Normal service saved, so nothing is marked as changed</span>')+'</div>';
   if(!m.screens.length&&!nUn)h+='<section class="card panel"><p class="empty">Nothing matches that. Clear the filters to see everything.</p></section>';
   else if(chain)h+='<section class="card panel"><!--detail-->'+chainHtml(chain)+'<p class="note" style="margin-top:12px">Blue boxes are the router and purple boxes are a switcher or converter. '+(flowMode==='plumbing'?'This is the plumbing only: what each mix is cut to is left out. ':'')+'It shows how things are routed, not whether a picture is actually present.</p></section>';
-  else h+='<section class="card panel"><!--detail--><div class="scroll"><svg viewBox="0 0 '+W+' '+m.H+'" role="group" aria-label="System map" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div><p class="note" style="margin-top:12px">Amber marks an output that differs from '+esc(refName())+'. '+(m.dev?'':'Blue boxes are router ports and purple boxes are '+(CONVS.length?'the switcher or a converter. ':'inside the switcher. ')+(flowMode==='plumbing'?'This is the plumbing only: what each mix is cut to is left out. ':''))+(mapUnused?'Dashed boxes are inputs that feed nothing shown here. ':'')+'Colours show how things are routed, not whether a picture is actually present.</p></section>';
+  else h+='<section class="card panel"><!--detail--><div class="scroll"><svg viewBox="0 0 '+W+' '+m.H+'" role="group" aria-label="System map" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div><p class="note" style="margin-top:12px">Select a column heading to sort by it. Amber marks an output that differs from '+esc(refName())+'. '+(m.dev?'':'Blue boxes are router ports and purple boxes are '+(CONVS.length?'the switcher or a converter. ':'inside the switcher. ')+(flowMode==='plumbing'?'This is the plumbing only: what each mix is cut to is left out. ':''))+(mapUnused?'Dashed boxes are inputs that feed nothing shown here. ':'')+'Colours show how things are routed, not whether a picture is actually present.</p></section>';
   var dt='<div id="map-detail" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)">';
   var ss=m.screens.filter(function(s){return s.key===mapSel})[0],clr='<button type="button" class="btn" data-act="mapclear">'+(chain?'Back to the whole map':'Clear selection')+'</button>';
   if(ss&&ss.d!==undefined){var ds=describe(ss.d,flowMode==='plumbing'),g=groupOf(ss.d);
@@ -875,15 +1002,17 @@ function renderSpaces(){
 
 /* ---------- patch and devices ---------- */
 function patchRows(){
-  var needle=pq.trim().toLowerCase(),h='';
+  var needle=pq.trim().toLowerCase(),list=[];
   RT.outL.forEach(function(l,o){if(named&&plainOut(l))return;var s=describe(o),fed=RT.inL[S.RR[o]];
     if(needle&&(l+' '+s.title+' '+fed+' '+outName(o)).toLowerCase().indexOf(needle)<0)return;
-    h+='<tr class="click" data-row="'+o+'" tabindex="0"><td class="num">'+(o+1)+'</td><td>'+esc(clean(l))+'</td><td>'+esc(s.title)+(s.me?' <span class="chip sw">'+esc(s.sub)+'</span>':'')+'</td><td class="raw" style="font-size:12px">'+esc(fed)+'</td><td>'+(RT.lock[o]?'<span class="chip">Locked</span>':'')+'</td></tr>'});
-  return h||'<tr><td colspan="5">No output matches that.</td></tr>'}
+    list.push({o:o,l:l,s:s,fed:fed})});
+  list=sortRows(list,SORTS.patch,function(x,k){return k==='out'?x.o:k==='dest'?clean(x.l):k==='showing'?x.s.title:k==='fed'?x.fed:RT.lock[x.o]?'Locked':''});
+  return list.map(function(x){var o=x.o,s=x.s;
+    return '<tr class="click" data-row="'+o+'" tabindex="0"><td class="num">'+(o+1)+'</td><td>'+esc(clean(x.l))+'</td><td>'+esc(s.title)+(s.me?' <span class="chip sw">'+esc(s.sub)+'</span>':'')+'</td><td class="raw" style="font-size:12px">'+esc(x.fed)+'</td><td>'+(RT.lock[o]?'<span class="chip">Locked</span>':'')+'</td></tr>'}).join('')||'<tr><td colspan="5">No output matches that.</td></tr>'}
 function renderPatch(){
   var f=findings(),h='<section class="card panel"><h2>Worth a look</h2><ul class="finds">'+(f.length?f.map(function(x){return '<li>'+esc(x.t)+(x.o!==undefined?' <button type="button" class="linkbtn" data-act="trace" data-d="'+x.o+'">Signal path</button>':'')+'</li>'}).join(''):'<li>Nothing stands out in the current patch.</li>')+'</ul></section>';
   h+='<div class="field"><input type="search" id="patch-search" placeholder="Green" aria-label="Filter the patch list" value="'+esc(pq)+'"><label class="check"><input type="checkbox" id="patch-named"'+(named?' checked':'')+'>Named outputs only</label></div>';
-  h+='<section class="card"><div class="scroll"><table><thead><tr><th>Out</th><th>Destination</th><th>Showing</th><th>Fed by</th><th></th></tr></thead><tbody id="patch">'+patchRows()+'</tbody></table></div></section>';
+  h+='<section class="card"><div class="scroll"><table><thead><tr>'+sortTh('patch','out','Out')+sortTh('patch','dest','Destination')+sortTh('patch','showing','Showing')+sortTh('patch','fed','Fed by')+sortTh('patch','lock','Lock')+'</tr></thead><tbody id="patch">'+patchRows()+'</tbody></table></div></section>';
   $('main').innerHTML=h}
 var ADDR={},devForm={subnet:'',ip:'',place:'',role:'room',places:{},roles:{}},devScan=null,devBusy=false,devErr='';
 var ROLE_OPTS=[['room','Room switcher or extra device'],['deck','Recorder (HyperDeck)'],['conv','Converter (Teranex)'],['mon','Monitor (SmartView)'],['ndi','NDI converter (Magewell)'],['router','Main router (replaces the current one)'],['switcher','Main switcher (replaces the current one)']];
@@ -896,71 +1025,129 @@ function devAdd(ip,place,role){
   var go=function(){devPost({action:'add',ip:ip,place:place,role:role},'Device added.').then(function(ok){if(ok&&devScan)devScan.found.forEach(function(d){if(d.ip===ip)d.known=true});if(ok){devForm.ip='';devForm.place='';render()}})};
   if(role!=='router'&&role!=='switcher'){go();return}
   pending={raw:true,yes:'Replace it',text:'Replace the main '+role+' with the device at '+ip+'? Spaces, presets and saved Normal service were made for the current one.',fn:go};renderBar()}
-function renderDevices(){
-  var c=conn||{},h='';
-  var rows=[{id:'rtr',role:'Main router',place:PLACES.rtr,model:RT.model,size:RT.inL.length+' in, '+RT.outL.length+' out',ip:ADDR.rtr,up:LIVE?!!c.rtr:null},{id:'sw',role:'Main switcher',place:PLACES.sw,model:SW.model,size:SW.inL.length+' in, '+SW.outL.length+' out',ip:ADDR.sw,up:LIVE?!!(c.sw&&c.mix):null}];
-  ROOMS.forEach(function(r){rows.push({id:r.id,role:'Room switcher',place:r.where,model:r.model,size:r.inL.length+' in, '+r.outL.length+' out',ip:r.ip,up:LIVE?r.up!==false:null,room:true,roomObj:r})});
-  DECKS.forEach(function(k){rows.push({id:k.id,role:'Recorder',place:k.place,model:(k.model||'HyperDeck')+(k.name?' · '+k.name:''),size:k.slot?'recording to '+k.slot:'no disk selected',ip:k.ip,up:LIVE?k.up!==false:null,deck:k})});
-  CONVS.forEach(function(c){rows.push({id:c.id,role:'Converter',place:c.place,model:(c.model||'Teranex')+(c.name?' · '+c.name:''),size:convWork(c),ip:c.ip,up:LIVE?c.up!==false:null,conv:c})});
-  MONS.forEach(function(m){rows.push({id:m.id,role:'Monitor',place:m.place,model:(m.model||'SmartView')+(m.name?' · '+m.name:''),size:(m.input?'on '+m.input:'input not reported')+(m.brightness!=null?', brightness '+m.brightness:'')+(m.border?', '+m.border.toLowerCase()+' border':''),ip:m.ip,up:LIVE?m.up!==false:null,mon:m})});
-  NDIS.forEach(function(n){rows.push({id:n.id,role:'NDI converter',place:n.place,model:(n.model||'Magewell Pro Convert')+(n.name?' · '+n.name:''),size:n.signal?'picture '+ndiPicture(n):'picture not reported',ip:n.ip,up:LIVE?n.up!==false:null,ndi:n})});
-  if(devErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(devErr)+'</p>';
-  h+='<section class="card"><div class="rows">';
+/* ---------- what the router's port labels say about cabling ---------- */
+/* Blackmagic devices do not report what is plugged into them. The only clue the system holds is the names on the router's
+   ports, such as REC-IN-01 or TRNX-OUT-1A, so those are read and offered. Nothing is saved until someone accepts it. */
+function labelPorts(labels,re){var a=[];labels.forEach(function(l,i){if(re.test(l))a.push(i)});return a}
+function ordinal(list,x){return list.slice().sort(function(a,b){return natCmp(a.name||a.id,b.name||b.id)}).indexOf(x)+1}
+function sameList(a,b){return a.length===b.length&&a.every(function(v,i){return v===b[i]})}
+function normName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+function suggest(r){
+  var parts=[],posts=[],fresh=true,found=0,n,f,rt,cur;
+  var num=function(k){return '[\\s_-]*0*'+k+'(?!\\d)'};
+  var setList=function(now,want,word,labels,mk){
+    if(!want.length)return;found++;
+    if(sameList(now,want))return;
+    if(now.length)fresh=false;
+    parts.push(word+' '+portNames(labels,want));
+    now.forEach(function(p){posts.push(mk('rm',p))});want.forEach(function(p){posts.push(mk('add',p))})};
+  if(r.deck){n=ordinal(DECKS,r.deck);var W='\\b(?:REC(?:ORD(?:ER)?)?|HYPERDECK|DECK)[\\s_-]*';
+    f=labelPorts(RT.outL,new RegExp(W+'IN'+num(n),'i'));rt=labelPorts(RT.inL,new RegExp(W+'OUT'+num(n),'i'));
+    if(f.length){found++;if(r.deck.feed!==f[0]){if(r.deck.feed!=null)fresh=false;parts.push('records from router output '+portNames(RT.outL,[f[0]]));posts.push({action:'deck-feed',id:r.id,port:f[0]})}}
+    setList(r.deck.returns||[],rt,'plays back on router input',RT.inL,function(op,p){return {action:op==='rm'?'deck-ret-rm':'deck-ret-add',id:r.id,port:p}})}
+  else if(r.conv){n=ordinal(CONVS,r.conv);var W2='\\b(?:TRNX|TERANEX|TRX|CONV(?:ERTER)?|CVRT)[\\s_-]*';
+    f=labelPorts(RT.outL,new RegExp(W2+'IN'+num(n),'i'));rt=labelPorts(RT.inL,new RegExp(W2+'OUT'+num(n),'i'));
+    setList(r.conv.feeds||[],f,'fed by router output',RT.outL,function(op,p){return {action:'conv-link',id:r.id,list:'feeds',op:op,port:p}});
+    setList(r.conv.returns||[],rt,'comes back on router input',RT.inL,function(op,p){return {action:'conv-link',id:r.id,list:'returns',op:op,port:p}})}
+  else if(r.mon){var toks=((r.mon.name||'')+' '+(r.mon.place||'')).match(/\d{3,}/g)||[],pl=normName(r.mon.place);
+    f=labelPorts(RT.outL,{test:function(l){return toks.some(function(t){return new RegExp('(^|\\D)'+t+'(\\D|$)').test(l)})}});
+    if(!f.length&&pl.length>=4)f=labelPorts(RT.outL,{test:function(l){return normName(l).indexOf(pl)>=0}});
+    var mo=f.filter(function(i){return /MON/i.test(RT.outL[i])});if(mo.length)f=mo;
+    if(f.length<=2)setList(r.mon.feeds||[],f,'fed by router output',RT.outL,function(op,p){return {action:'mon-link',id:r.id,op:op,port:p}})}
+  else if(r.roomObj){var rp=normName(r.roomObj.where||r.roomObj.place),lk=LINKS.filter(function(l){return l.room===r.id})[0];
+    f=rp.length>=4?labelPorts(RT.outL,{test:function(l){return normName(clean(l)).indexOf(rp)>=0}}):[];
+    if(f.length===1&&!LINKS.some(function(l){return l.room!==r.id&&l.rtrOut===f[0]})){found++;
+      if(!lk||lk.rtrOut!==f[0]){if(lk)fresh=false;parts.push('building feed comes from router output '+portNames(RT.outL,f));posts.push({action:'room-link',id:r.id,rtrOut:f[0],input:null})}}}
+  if(!found)return null;
+  return {posts:posts,text:parts.join('; '),fresh:fresh,match:!posts.length}}
+function devPostAll(posts,msg){var i=0;(function next(ok){if(ok===false)return;if(i>=posts.length){say(msg);return}devPost(posts[i++]).then(next)})(true)}
+
+/* ---------- devices page ---------- */
+var devOpen=null;
+function ipNum(ip){var p=String(ip||'').split('.');return p.length===4?((+p[0]*256+ +p[1])*256+ +p[2])*256+ +p[3]:''}
+function devRows(){
+  var c=conn||{},rows=[],tied=TIE_IN||TIE_OUT;
+  rows.push({id:'rtr',role:'Main router',name:RT.name||'',place:PLACES.rtr,model:RT.model,size:RT.inL.length+' in, '+RT.outL.length+' out',ip:ADDR.rtr,up:LIVE?!!c.rtr:null,core:true,
+    conn:tied?'Out 1–'+TIE_IN+' to the switcher, in 1–'+TIE_OUT+' back':'Not tied to the switcher'});
+  rows.push({id:'sw',role:'Main switcher',name:SW.name||'',place:PLACES.sw,model:SW.model,size:SW.inL.length+' in, '+SW.outL.length+' out',ip:ADDR.sw,up:LIVE?!!(c.sw&&c.mix):null,core:true,
+    conn:tied?'In 1–'+TIE_IN+' from the router, out 1–'+TIE_OUT+' back':'Not tied to the router'});
+  ROOMS.forEach(function(r){var lk=LINKS.filter(function(l){return l.room===r.id})[0];
+    rows.push({id:r.id,role:'Room switcher',name:r.name&&r.name!==r.model?r.name:'',place:r.where,model:r.model,size:r.inL.length+' in, '+r.outL.length+' out',ip:r.ip,up:LIVE?r.up!==false:null,room:true,roomObj:r,unset:!lk,
+      conn:lk?'Router out '+(lk.rtrOut+1)+(lk.input!==null&&r.inL[lk.input]!==undefined?' to input '+lk.input+' · '+r.inL[lk.input]:', input not known'):'No building feed set'})});
+  DECKS.forEach(function(k){var rets=k.returns||[];
+    rows.push({id:k.id,role:'Recorder',name:k.name||'',place:k.place,model:k.model||'HyperDeck',size:k.slot?'recording to '+k.slot:'no disk selected',ip:k.ip,up:LIVE?k.up!==false:null,deck:k,unset:k.feed==null,
+      conn:(k.feed!=null?'Records router out '+(k.feed+1):'Feed not set')+(rets.length?', plays back on in '+ranges(rets):'')})});
+  CONVS.forEach(function(cv){var fd=cv.feeds||[],rt=cv.returns||[];
+    rows.push({id:cv.id,role:'Converter',name:cv.name||'',place:cv.place,model:cv.model||'Teranex',size:convWork(cv),ip:cv.ip,up:LIVE?cv.up!==false:null,conv:cv,unset:!fd.length,
+      conn:(fd.length?'Router out '+ranges(fd):'Feed not set')+(rt.length?', back on in '+ranges(rt):'')})});
+  MONS.forEach(function(m){var mf=m.feeds||[];
+    rows.push({id:m.id,role:'Monitor',name:m.name||'',place:m.place,model:m.model||'SmartView',size:(m.input?'on '+m.input:'input not reported')+(m.brightness!=null?', brightness '+m.brightness:'')+(m.border?', '+m.border.toLowerCase()+' border':''),ip:m.ip,up:LIVE?m.up!==false:null,mon:m,unset:!mf.length,
+      conn:mf.length?'Router out '+ranges(mf):'Feed not set'})});
+  NDIS.forEach(function(n){rows.push({id:n.id,role:'NDI converter',name:n.name||'',place:n.place,model:n.model||'Magewell Pro Convert',size:n.signal?'picture '+ndiPicture(n):'picture not reported',ip:n.ip,up:LIVE?n.up!==false:null,ndi:n,conn:'Status only, not traced'})});
   rows.forEach(function(r){
-    h+='<div class="row" style="cursor:default"><div class="nm"><b>'+esc(r.role)+'</b><small style="font-family:var(--sans);font-size:12px">'+esc(r.model||'Unknown model')+' · '+r.size+'</small></div><div class="now">';
-    h+=LIVE?'<label class="lbl" for="dev-place-'+esc(r.id)+'">Where it is<input type="text" id="dev-place-'+esc(r.id)+'" data-dev-place="'+esc(r.id)+'" value="'+esc(r.place||'')+'" placeholder="Rack Room" style="max-width:190px"></label>':'<b>'+esc(r.place||'Place not recorded')+'</b>';
-    if(r.ndi&&LIVE)h+='<label class="lbl" for="ndi-name-'+esc(r.id)+'">Name<input type="text" id="ndi-name-'+esc(r.id)+'" data-ndi-name="'+esc(r.id)+'" value="'+esc(r.ndi.name||'')+'" placeholder="Lobby TV decoder" style="max-width:190px"></label>';
-    h+='</div><div class="tags">'+(r.ip?'<span class="raw" style="font-size:12px">'+esc(r.ip)+'</span>':'')+(r.roomObj&&r.up?liveChips(r.roomObj):'')+(r.up===null?'<span class="chip">Snapshot</span>':!r.up?'<span class="chip warn">Not answering</span>':r.deck?'<span class="chip '+deckState(r.deck).cls+'">'+esc(deckLine(r.deck))+'</span>':r.conv?'<span class="chip '+convState(r.conv).cls+'">'+esc(convState(r.conv).text)+'</span>':r.ndi?'<span class="chip ok">'+(r.ndi.signal?'Picture '+esc(ndiPicture(r.ndi)):'Answering')+'</span>':'<span class="chip ok">Connected</span>')+(LIVE&&(r.room||r.deck||r.conv||r.mon||r.ndi)?'<button type="button" class="btn" data-act="dev-rm" data-id="'+esc(r.id)+'">Remove</button>':'')+'</div></div>';
-    if(r.mon){var mn=r.mon,mf=mn.feeds||[];
-      h+='<div class="row" style="cursor:default;background:var(--surface-2)"><div class="field" style="flex:1">';
-      if(LIVE){h+='<span class="lbl">Fed by router outputs, SDI 1 first</span>'+(mf.length?mf.map(function(i){return '<span class="chip tagx">'+(i+1)+' · '+esc(clean(RT.outL[i]||''))+'<button type="button" class="xbtn" data-act="mon-link" data-op="rm" data-id="'+mn.id+'" data-port="'+i+'" aria-label="Remove router output '+(i+1)+'">×</button></span>'}).join(''):'<span class="empty">nothing yet</span>');
-        h+='<select id="mon-feeds-'+mn.id+'" aria-label="Router output that feeds '+esc(monName(mn))+'">'+RT.outL.map(function(l,i){return mf.indexOf(i)<0?'<option value="'+i+'">'+(i+1)+' · '+esc(clean(l))+'</option>':''}).join('')+'</select><button type="button" class="btn" data-act="mon-link" data-op="add" data-id="'+mn.id+'">Add</button>'}
-      else h+='<span class="lbl">Fed by '+(mf.length?mf.map(function(i){return 'router output '+(i+1)}).join(', '):'nothing set')+'.</span>';
-      h+='</div></div>'}
-    if(r.roomObj){var ro=r.roomObj,lk=LINKS.filter(function(l){return l.room===ro.id})[0]||{rtrOut:null,input:null};
-      h+='<div class="row" style="cursor:default;background:var(--surface-2)"><div class="field" style="flex:1">';
-      if(LIVE){
-        h+='<label class="lbl" for="rl-out-'+esc(ro.id)+'">Building feed comes from<select id="rl-out-'+esc(ro.id)+'" data-room-link="'+esc(ro.id)+'"><option value="">Not connected</option>'+RT.outL.map(function(l,o){return '<option value="'+o+'"'+(lk.rtrOut===o?' selected':'')+'>'+(o+1)+' · '+esc(clean(l))+'</option>'}).join('')+'</select></label>';
-        h+='<label class="lbl" for="rl-in-'+esc(ro.id)+'">Arrives on switcher input<select id="rl-in-'+esc(ro.id)+'" data-room-link="'+esc(ro.id)+'"'+(lk.rtrOut===null?' disabled':'')+'><option value="">Not known</option>'+ro.inL.map(function(l,i){return '<option value="'+i+'"'+(lk.input===i?' selected':'')+'>'+i+' · '+esc(l)+'</option>'}).join('')+'</select></label>'}
-      else h+='<span class="lbl">'+(lk.rtrOut===null?'No building feed set.':'Building feed comes from router output '+(lk.rtrOut+1)+(lk.input!==null&&ro.inL[lk.input]!==undefined?', on input '+lk.input+' ('+esc(ro.inL[lk.input])+')':', input not known')+'.')+'</span>';
-      h+='</div></div>'}
-    if(r.conv){var cv=r.conv;
-      var list=function(key,labels,word,help){var a=cv[key]||[],o='<span class="lbl">'+word+'</span>'+(a.length?a.map(function(i){return '<span class="chip tagx">'+(i+1)+' · '+esc(clean(labels[i]||''))+'<button type="button" class="xbtn" data-act="conv-link" data-op="rm" data-list="'+key+'" data-id="'+cv.id+'" data-port="'+i+'" aria-label="Remove router port '+(i+1)+'">×</button></span>'}).join(''):'<span class="empty">nothing yet</span>');
-        return o+'<select id="conv-'+key+'-'+cv.id+'" aria-label="'+help+'">'+labels.map(function(l,i){return a.indexOf(i)<0?'<option value="'+i+'">'+(i+1)+' · '+esc(clean(l))+'</option>':''}).join('')+'</select><button type="button" class="btn" data-act="conv-link" data-op="add" data-list="'+key+'" data-id="'+cv.id+'">Add</button>'};
-      h+='<div class="row" style="cursor:default;background:var(--surface-2)"><div class="field" style="flex:1">';
-      if(LIVE)h+=list('feeds',RT.outL,'Fed by router outputs, SDI 1 first','Router output that feeds '+esc(convName(cv)))+'</div><div class="field" style="flex-basis:100%">'+list('returns',RT.inL,'Comes back on router inputs','Router input that '+esc(convName(cv))+' returns on');
-      else h+='<span class="lbl">Fed by '+((cv.feeds||[]).length?(cv.feeds||[]).map(function(i){return 'router output '+(i+1)}).join(', '):'nothing set')+'. Comes back on '+((cv.returns||[]).length?(cv.returns||[]).map(function(i){return 'router input '+(i+1)}).join(', '):'nothing set')+'.</span>';
-      h+='</div></div>'}
-    if(r.deck){var k=r.deck,rets=k.returns||[];
-      h+='<div class="row" style="cursor:default;background:var(--surface-2)"><div class="field" style="flex:1">';
-      if(LIVE){
-        h+='<label class="lbl" for="deck-feed-'+k.id+'">Records from<select id="deck-feed-'+k.id+'" data-deck-feed="'+k.id+'"><option value="">Not set</option>'+RT.outL.map(function(l,o){return '<option value="'+o+'"'+(k.feed===o?' selected':'')+'>'+(o+1)+' · '+esc(clean(l))+'</option>'}).join('')+'</select></label>';
-        h+='<span class="lbl">Plays back on</span>'+(rets.length?rets.map(function(i){return '<span class="chip tagx">'+(i+1)+' · '+esc(clean(RT.inL[i]||''))+'<button type="button" class="xbtn" data-act="deck-ret-rm" data-id="'+k.id+'" data-port="'+i+'" aria-label="Remove router input '+(i+1)+'">×</button></span>'}).join(''):'<span class="empty">nothing yet</span>');
-        h+='<select id="deck-ret-'+k.id+'" aria-label="Router input to add for '+esc(deckName(k))+'">'+RT.inL.map(function(l,i){return rets.indexOf(i)<0?'<option value="'+i+'">'+(i+1)+' · '+esc(clean(l))+'</option>':''}).join('')+'</select><button type="button" class="btn" data-act="deck-ret-add" data-id="'+k.id+'">Add</button>'}
-      else h+='<span class="lbl">Records from '+(k.feed!=null&&RT.outL[k.feed]?'router output '+(k.feed+1)+' ('+esc(clean(RT.outL[k.feed]))+')':'an output that is not set')+'. Plays back on '+(rets.length?rets.map(function(i){return 'router input '+(i+1)}).join(', '):'nothing yet')+'.</span>';
-      h+='</div></div>'}});
-  h+='</div></section>';
-  if(SW.mix){h+='<section class="card"><div class="scroll"><table><thead><tr><th>Switcher mix</th><th>On program</th><th>On preview</th></tr></thead><tbody>';
-    SW.mix.me.forEach(function(m,i){h+='<tr><td>'+esc(mixName(i+1))+'</td><td>'+esc(m.pgm.name)+'</td><td>'+esc(m.pvw.name)+'</td></tr>'});h+='</tbody></table></div></section>'}
-  if(!LIVE){h+='<p class="note">Adding and removing devices needs the live server. This snapshot shows the devices that were set up when it was taken.</p>';$('main').innerHTML=h;return}
+    r.state=r.up===null?{cls:'',text:'Snapshot'}:!r.up?{cls:'warn',text:'Not answering'}:r.deck?{cls:deckState(r.deck).cls,text:deckLine(r.deck)}:r.conv?{cls:convState(r.conv).cls,text:convState(r.conv).text}:r.ndi?{cls:'ok',text:r.ndi.signal?'Picture '+ndiPicture(r.ndi):'Answering'}:{cls:'ok',text:'Connected'};
+    r.sug=r.core||r.ndi?null:suggest(r)});
+  return rows}
+function devEditHtml(r){
+  var h='',line=function(k,body){return '<div class="field devline"><span class="devk">'+k+'</span>'+body+'</div>'};
+  var pick=function(id,labels,skip,help){return '<select id="'+id+'" aria-label="'+esc(help)+'">'+labels.map(function(l,i){return skip.indexOf(i)<0?'<option value="'+i+'">'+(i+1)+' · '+esc(clean(l))+'</option>':''}).join('')+'</select>'};
+  var tags=function(a,labels,attrs,what){return a.length?a.map(function(i){return '<span class="chip tagx">'+(i+1)+' · '+esc(clean(labels[i]||''))+'<button type="button" class="xbtn" '+attrs+' data-port="'+i+'" aria-label="Remove '+what+' '+(i+1)+'">×</button></span>'}).join(''):'<span class="empty">nothing yet</span>'};
+  h+=line('<label for="dev-place-'+esc(r.id)+'">Where it is</label>','<input type="text" id="dev-place-'+esc(r.id)+'" data-dev-place="'+esc(r.id)+'" value="'+esc(r.place||'')+'" placeholder="Rack Room" style="max-width:220px">');
+  if(r.ndi)h+=line('<label for="ndi-name-'+esc(r.id)+'">Name</label>','<input type="text" id="ndi-name-'+esc(r.id)+'" data-ndi-name="'+esc(r.id)+'" value="'+esc(r.ndi.name||'')+'" placeholder="Lobby TV decoder" style="max-width:220px"><span class="note">The unit does not give its own name without a sign-in.</span>');
+  if(r.core)h+=line('Tied together','<span class="note">Router outputs 1–'+TIE_IN+' feed switcher inputs 1–'+TIE_IN+'. Switcher outputs 1–'+TIE_OUT+' come back on router inputs 1–'+TIE_OUT+'.</span>');
+  if(r.roomObj){var ro=r.roomObj,lk=LINKS.filter(function(l){return l.room===ro.id})[0]||{rtrOut:null,input:null};
+    h+=line('<label for="rl-out-'+esc(ro.id)+'">Building feed comes from</label>','<select id="rl-out-'+esc(ro.id)+'" data-room-link="'+esc(ro.id)+'"><option value="">Not connected</option>'+RT.outL.map(function(l,o){return '<option value="'+o+'"'+(lk.rtrOut===o?' selected':'')+'>Router out '+(o+1)+' · '+esc(clean(l))+'</option>'}).join('')+'</select>');
+    h+=line('<label for="rl-in-'+esc(ro.id)+'">Arrives on its input</label>','<select id="rl-in-'+esc(ro.id)+'" data-room-link="'+esc(ro.id)+'"'+(lk.rtrOut===null?' disabled':'')+'><option value="">Not known</option>'+ro.inL.map(function(l,i){return '<option value="'+i+'"'+(lk.input===i?' selected':'')+'>'+i+' · '+esc(l)+'</option>'}).join('')+'</select><span class="note">The input cannot be read from the system, so choose it here.</span>')}
+  if(r.mon){var mn=r.mon,mf=mn.feeds||[];
+    h+=line('Fed by router outputs',tags(mf,RT.outL,'data-act="mon-link" data-op="rm" data-id="'+mn.id+'"','router output')+pick('mon-feeds-'+mn.id,RT.outL,mf,'Router output that feeds '+monName(mn))+'<button type="button" class="btn" data-act="mon-link" data-op="add" data-id="'+mn.id+'">Add</button><span class="note">SDI 1 first.</span>')}
+  if(r.conv){var cv=r.conv,cf=cv.feeds||[],cr=cv.returns||[];
+    h+=line('Fed by router outputs',tags(cf,RT.outL,'data-act="conv-link" data-op="rm" data-list="feeds" data-id="'+cv.id+'"','router output')+pick('conv-feeds-'+cv.id,RT.outL,cf,'Router output that feeds '+convName(cv))+'<button type="button" class="btn" data-act="conv-link" data-op="add" data-list="feeds" data-id="'+cv.id+'">Add</button><span class="note">SDI 1 first.</span>');
+    h+=line('Comes back on router inputs',tags(cr,RT.inL,'data-act="conv-link" data-op="rm" data-list="returns" data-id="'+cv.id+'"','router input')+pick('conv-returns-'+cv.id,RT.inL,cr,'Router input that '+convName(cv)+' returns on')+'<button type="button" class="btn" data-act="conv-link" data-op="add" data-list="returns" data-id="'+cv.id+'">Add</button>')}
+  if(r.deck){var k=r.deck,rets=k.returns||[];
+    h+=line('<label for="deck-feed-'+k.id+'">Records from</label>','<select id="deck-feed-'+k.id+'" data-deck-feed="'+k.id+'"><option value="">Not set</option>'+RT.outL.map(function(l,o){return '<option value="'+o+'"'+(k.feed===o?' selected':'')+'>Router out '+(o+1)+' · '+esc(clean(l))+'</option>'}).join('')+'</select>');
+    h+=line('Plays back on router inputs',tags(rets,RT.inL,'data-act="deck-ret-rm" data-id="'+k.id+'"','router input')+pick('deck-ret-'+k.id,RT.inL,rets,'Router input to add for '+deckName(k))+'<button type="button" class="btn" data-act="deck-ret-add" data-id="'+k.id+'">Add</button>')}
+  if(r.sug)h+=line('From the router\'s labels',r.sug.match?'<span class="chip ok">Matches</span><span class="note">The names on the router\'s ports agree with what is set here.</span>':'<span>'+esc(r.sug.text.charAt(0).toUpperCase()+r.sug.text.slice(1))+'.</span><button type="button" class="btn primary" data-act="dev-suggest" data-id="'+esc(r.id)+'">'+(r.sug.fresh?'Use this':'Replace with this')+'</button>');
+  else if(!r.core&&!r.ndi)h+=line('From the router\'s labels','<span class="note">No router port is named after this device, so its cabling has to be chosen above.</span>');
+  if(r.ndi)h+=line('Connections','<span class="note">NDI travels over the network, not through the router, and the unit does not say what it sends or shows without a sign-in. It is shown for status only.</span>');
+  if(!r.core)h+=line('','<button type="button" class="btn" data-act="dev-rm" data-id="'+esc(r.id)+'">Remove from the app</button>');
+  return h}
+function renderDevices(){
+  var rows=devRows(),h='';
+  if(devErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(devErr)+'</p>';
+  var todo=LIVE?rows.filter(function(r){return r.sug&&r.sug.fresh&&r.sug.posts.length}):[];
+  if(todo.length){h+='<section class="card panel"><h2>Cabling found in the router\'s labels</h2><p class="note" style="margin-bottom:10px">The devices do not report what is plugged into them, but the names on the router\'s ports show it for '+(todo.length===1?'one device':todo.length+' devices')+'. Check that these are right, then fill them in.</p><ul class="finds">';
+    todo.forEach(function(r){h+='<li><b>'+esc(r.name||r.model||r.role)+'</b>'+(r.place?' in '+esc(r.place):'')+': '+esc(r.sug.text)+'.</li>'});
+    h+='</ul><div class="field" style="margin-top:10px"><button type="button" class="btn primary" data-act="dev-suggest-all">Fill '+(todo.length===1?'this':'these')+' in</button></div></section>'}
+  var shown=sortRows(rows,SORTS.dev,function(r,k){return k==='name'?(r.name||r.model||''):k==='type'?r.role:k==='place'?(r.place||''):k==='ip'?ipNum(r.ip):k==='state'?r.state.text:r.conn});
+  h+='<section class="card"><div class="scroll"><table><thead><tr>'+sortTh('dev','name','Device')+sortTh('dev','type','Type')+sortTh('dev','place','Where')+sortTh('dev','ip','Address')+sortTh('dev','state','State')+sortTh('dev','conn','Connections')+'<th></th></tr></thead><tbody>';
+  shown.forEach(function(r){var open=LIVE&&devOpen===r.id;
+    h+='<tr'+(open?' class="devsel"':'')+'><td><b style="font-weight:600">'+esc(r.name||r.model||'Unknown model')+'</b><div class="raw" style="font-family:var(--sans);font-size:12px">'+esc((r.name&&r.model?r.model+' · ':'')+r.size)+'</div></td><td>'+esc(r.role)+'</td><td>'+esc(r.place||'Not recorded')+'</td><td class="raw" style="font-size:12px">'+esc(r.ip||'')+'</td>';
+    h+='<td><span class="chip '+r.state.cls+'" style="white-space:normal">'+esc(r.state.text)+'</span>'+(r.roomObj&&r.up?' '+liveChips(r.roomObj):'')+'</td>';
+    h+='<td>'+esc(r.conn)+(r.sug&&r.sug.posts.length?' <span class="chip brand">'+(r.sug.fresh?'Suggestion':'Labels differ')+'</span>':r.unset&&!r.sug?' <span class="chip warn">To set</span>':'')+'</td>';
+    h+='<td style="text-align:right">'+(LIVE?'<button type="button" class="btn" data-act="dev-edit" data-id="'+esc(r.id)+'" aria-expanded="'+(open?'true':'false')+'">'+(open?'Close':'Edit')+'</button>':'')+'</td></tr>';
+    if(open)h+='<tr class="devedit"><td colspan="7">'+devEditHtml(r)+'</td></tr>'});
+  h+='</tbody></table></div></section>';
+  if(!LIVE){h+='<p class="note">Adding, removing and editing devices needs the live server. This snapshot shows the devices that were set up when it was taken.</p>'}
+  else{
+  h+='<p class="note">Select a column heading to sort. Select Edit to set where a device is and how it is cabled to the router.</p>';
   var guess=devForm.subnet||(ADDR.rtr?ADDR.rtr.split('.').slice(0,3).join('.'):'');
-  h+='<section class="card panel"><h2>Find devices on the network</h2><p class="note" style="margin-bottom:10px">This looks for Blackmagic routers, switchers, HyperDeck recorders, Teranex converters, SmartView monitors and Magewell NDI converters by asking each address on a network who it is. It only reads their greeting and changes nothing. Devices on another network, such as an NDI network, are found by entering that network here.</p>';
-  h+='<div class="field"><label for="dev-subnet" style="font-weight:500">Network</label><input type="text" id="dev-subnet" data-devf="subnet" value="'+esc(guess)+'" placeholder="10.0.0" aria-describedby="dev-subnet-hint" style="max-width:160px"><button type="button" class="btn primary" data-act="dev-scan">'+(devBusy?'Searching…':'Find devices')+'</button><span class="note" id="dev-subnet-hint">The first three numbers of the address.</span></div>';
+  h+='<section class="card panel"><h2>Add devices</h2><p class="note" style="margin-bottom:10px">Search a network for Blackmagic routers, switchers, HyperDeck recorders, Teranex converters, SmartView monitors and Magewell NDI converters. The search asks each address who it is, only reads the greeting and changes nothing. Devices on another network, such as an NDI network, are found by entering that network here.</p>';
+  h+='<div class="field devline"><label class="devk" for="dev-subnet">Search a network</label><input type="text" id="dev-subnet" data-devf="subnet" value="'+esc(guess)+'" placeholder="10.0.0" aria-describedby="dev-subnet-hint" style="max-width:160px"><button type="button" class="btn primary" data-act="dev-scan">'+(devBusy?'Searching…':'Find devices')+'</button><span class="note" id="dev-subnet-hint">The first three numbers of the address.</span></div>';
   if(devScan){
     if(!devScan.found.length)h+='<p class="empty" style="margin-top:12px">Nothing this app knows answered on '+esc(devScan.searched.join(', '))+'.</p>';
-    else{h+='<div class="rows" style="margin-top:12px;border-top:1px solid var(--line)">';
+    else{h+='<div class="rows" style="margin:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">';
       devScan.found.forEach(function(d){
         h+='<div class="row" style="cursor:default;padding-left:0;padding-right:0"><div class="nm"><b>'+esc(d.model||'Unknown model')+'</b><small>'+esc(d.ip)+(d.name?' · '+esc(d.name):'')+(d.kind==='deck'?' · recorder':d.kind==='conv'?' · converter':d.kind==='mon'?' · monitor':d.kind==='ndi'?' · NDI converter':' · '+d.inputs+' in, '+d.outputs+' out')+'</small></div>';
         if(d.known)h+='<div class="tags"><span class="chip ok">Already added</span></div>';
         else h+='<div class="tags"><input type="text" id="dev-p-'+esc(d.ip)+'" data-devf="p:'+esc(d.ip)+'" value="'+esc(devForm.places[d.ip]||'')+'" placeholder="Where it is" aria-label="Where '+esc(d.model||'this device')+' is" style="max-width:150px">'+(d.kind==='deck'?'<span class="chip">Recorder</span>':d.kind==='conv'?'<span class="chip">Converter</span>':d.kind==='mon'?'<span class="chip">Monitor</span>':d.kind==='ndi'?'<span class="chip">NDI converter</span>':roleSelect('id="dev-r-'+esc(d.ip)+'" data-devf="r:'+esc(d.ip)+'" aria-label="How to use '+esc(d.model||'this device')+'"',devForm.roles[d.ip]||'room'))+'<button type="button" class="btn" data-act="dev-add" data-ip="'+esc(d.ip)+'">Add</button></div>';
         h+='</div>'});
       h+='</div>'}
-    if(devScan.other)h+='<p class="note" style="margin-top:10px">'+devScan.other+(devScan.other===1?' other address':' other addresses')+' answered but reported no router or switcher, so '+(devScan.other===1?'it is':'they are')+' not listed.</p>'}
-  h+='</section>';
-  h+='<section class="card panel"><h2>Add a device by address</h2><div class="field"><input type="text" id="dev-ip" data-devf="ip" value="'+esc(devForm.ip)+'" placeholder="10.0.0.20" aria-label="Device address" style="max-width:150px"><input type="text" id="dev-newplace" data-devf="place" value="'+esc(devForm.place)+'" placeholder="Chapel" aria-label="Where the device is" style="max-width:170px">'+roleSelect('id="dev-role" data-devf="role" aria-label="How to use this device"',devForm.role)+'<button type="button" class="btn" data-act="dev-add-manual">Add device</button></div>';
-  h+='<p class="note" style="margin-top:12px">A second router or an extra switcher can be added as a room device. It shows here and in the System map\'s device views, but paths are only traced through the main router and main switcher.</p></section>';
+    if(devScan.other)h+='<p class="note" style="margin:10px 0">'+devScan.other+(devScan.other===1?' other address':' other addresses')+' answered but reported no router or switcher, so '+(devScan.other===1?'it is':'they are')+' not listed.</p>'}
+  h+='<div class="field devline"><label class="devk" for="dev-ip">Or add one by address</label><input type="text" id="dev-ip" data-devf="ip" value="'+esc(devForm.ip)+'" placeholder="10.0.0.20" aria-label="Device address" style="max-width:150px"><input type="text" id="dev-newplace" data-devf="place" value="'+esc(devForm.place)+'" placeholder="Where it is" aria-label="Where the device is" style="max-width:170px">'+roleSelect('id="dev-role" data-devf="role" aria-label="How to use this device"',devForm.role)+'<button type="button" class="btn" data-act="dev-add-manual">Add device</button></div>';
+  h+='<p class="note" style="margin-top:12px">A second router or an extra switcher can be added as a room device. It shows here and on the System map. Paths are traced through the main router and main switcher, and on into a room switcher whose building feed is set.</p></section>'}
+  if(SW.mix){h+='<section class="card"><div class="scroll"><table><thead><tr><th>Switcher mix</th><th>On program</th><th>On preview</th></tr></thead><tbody>';
+    SW.mix.me.forEach(function(m,i){h+='<tr><td>'+esc(mixName(i+1))+'</td><td>'+esc(m.pgm.name)+'</td><td>'+esc(m.pvw.name)+'</td></tr>'});h+='</tbody></table></div></section>'}
   $('main').innerHTML=h}
-
 function render(){
   if(dragging)return;
   var a=document.activeElement,fid=a&&a.id&&$('main').contains(a)?a.id:null,pos=fid&&a.selectionStart!=null?a.selectionStart:null;
@@ -983,6 +1170,10 @@ document.addEventListener('click',function(e){
     else if(a==='no'){pending=null;renderBar()}
     else if(a==='dismiss'){toast=null;renderBar()}
     else if(a==='mapclear'){mapSel=null;render()}
+    else if(a==='sys-open'){mapScope=b.dataset.id;mapSel=null;render();window.scrollTo(0,0)}
+    else if(a==='sys-space'){space=b.dataset.g;mapScope='rooms';mapSel=null;pick=null;render();window.scrollTo(0,0)}
+    else if(a==='dev-edit'){devOpen=devOpen===b.dataset.id?null:b.dataset.id;render()}
+    else if(a==='dev-suggest'||a==='dev-suggest-all'){var sgr=devRows().filter(function(x){return x.sug&&x.sug.posts.length&&(a==='dev-suggest'?x.id===b.dataset.id:x.sug.fresh)}),sgp=[];sgr.forEach(function(x){sgp=sgp.concat(x.sug.posts)});if(sgp.length)devPostAll(sgp,'Saved for everyone.')}
     else if(a==='pin-cancel'){pinAsk=false;pinErr='';render()}
     else if(a==='pin-set'){var pv=$('pin-new').value;
       if(!/^\d{4,8}$/.test(pv)){pinSetErr='Use 4 to 8 digits.';render();$('pin-new').focus();return}
@@ -1030,6 +1221,7 @@ document.addEventListener('click',function(e){
       g2.modes.push({name:n,set:groupSet(g2)});errs[g2.id]='';saveSpaces(true);say('Preset "'+n+'" saved for '+g2.name+'.');render()}
     return}
   var t;
+  if((t=e.target.closest('[data-sort]'))){sortClick(t.getAttribute('data-sort'));render();return}
   if((t=e.target.closest('[data-space-go]'))){space=t.dataset.spaceGo;try{localStorage.setItem('vr-space',space)}catch(e3){}pick=null;render();window.scrollTo(0,0);return}
   if((t=e.target.closest('[data-flow]'))){flowMode=t.dataset.flow;render();return}
   if((t=e.target.closest('[data-nav]'))){go(t.dataset.nav);return}
@@ -1051,7 +1243,7 @@ document.addEventListener('click',function(e){
   if((t=e.target.closest('[data-dest]'))){var d=+t.dataset.dest;pick=pick===d?null:d;render();return}
   if((t=e.target.closest('[data-room]'))){go('room',t.dataset.room);return}
   if((t=e.target.closest('[data-row]'))){showPath(+t.dataset.row)}});
-document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;var t=e.target;if(t.matches&&t.matches('[data-dest],[data-row],[data-room],[data-map]')){e.preventDefault();t.click()}});
+document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;var t=e.target;if(t.matches&&t.matches('[data-dest],[data-row],[data-room],[data-map],text[data-sort]')){e.preventDefault();t.click()}});
 document.addEventListener('change',function(e){var t=e.target;
   if(t.id==='floor-file'){var f=t.files&&t.files[0];if(!f)return;
     if(['image/png','image/jpeg','image/webp'].indexOf(f.type)<0){floorErr='Use a PNG, JPEG or WebP image.';render();return}
