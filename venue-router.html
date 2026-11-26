@@ -240,7 +240,7 @@ if(!SNAP){$('main').textContent='This copy of the page has no system in it. Star
 
 /* Venue setup comes from the server (venue.json and spaces.json), never from this file. */
 var TIE_OUT=0,TIE_IN=0;
-var PORTS={plates:{in:'',out:''},rtr:{in:{},out:{}},sw:{in:{},out:{}},rooms:{}},VERSION='';
+var PORTS={plates:{in:'',out:''},rtr:{in:{},out:{}},sw:{in:{},out:{}},rooms:{}},VERSION='',RENAMES=[];
 var GROUPS=[];
 var OUT_NAME={},SRC_NAME={},MIX={};
 var COMMON=[];
@@ -311,7 +311,7 @@ function meta(snap){
   var nn=snap.names||{};OUT_NAME=nn.out||{};SRC_NAME=nn.src||{};MIX=nn.mix||{};
   COMMON=Array.isArray(snap.common)&&snap.common.length?snap.common.slice():(function(){var a=[];((snap.rtr||{}).inL||[]).forEach(function(l,i){if(a.length<16&&i>=TIE_OUT&&!/^(RTR-IN-\d+|Input \d+)$/.test(l))a.push(i)});return a})();
   var pt=snap.ports||{},pdev=function(d){return {in:(d||{}).in||{},out:(d||{}).out||{}}},prm={};Object.keys(pt.rooms||{}).forEach(function(k){prm[k]=pdev(pt.rooms[k])});
-  PORTS={plates:{in:(pt.plates||{}).in||'',out:(pt.plates||{}).out||''},rtr:pdev(pt.rtr),sw:pdev(pt.sw),rooms:prm};VERSION=snap.version||'';
+  PORTS={plates:{in:(pt.plates||{}).in||'',out:(pt.plates||{}).out||''},rtr:pdev(pt.rtr),sw:pdev(pt.sw),rooms:prm};VERSION=snap.version||'';RENAMES=Array.isArray(snap.renames)?snap.renames:[];
   DECKS=snap.decks||[];CONVS=snap.convs||[];MONS=snap.mons||[];NDIS=snap.ndis||[];if(typeof snap.pin==='boolean'){auth.pinSet=snap.pin;if(!snap.pin)auth.ok=false}ADDR=snap.addr||{};if(snap.prefs)setPrefs(snap.prefs);if(Array.isArray(snap.spaces))GROUPS=JSON.parse(JSON.stringify(snap.spaces));if(snap.floor)FLOOR={pins:snap.floor.pins||{},hasImage:!!snap.floor.hasImage,v:snap.floor.v||0};ROOMS=snap.rooms||[];
   /* Two switchers in one room are told apart by model. r.where keeps the plain place for editing. */
   (function(){var n={};ROOMS.forEach(function(r){n[r.place]=(n[r.place]||0)+1});ROOMS.forEach(function(r){r.where=r.place;if(n[r.place]>1)r.place=r.place+' · '+String(r.model||r.name||r.id).replace(/^ATEM\s+/,'')})})();LINKS=snap.links||[];PLACES={};var p=snap.places||{};Object.keys(p).forEach(function(k){PLACES[k]=p[k]});ROOMS.forEach(function(r){PLACES[r.id]=r.place});DECKS.forEach(function(k){PLACES[k.id]=k.place});CONVS.forEach(function(c){PLACES[c.id]=c.place});MONS.forEach(function(m){PLACES[m.id]=m.place})}
@@ -461,7 +461,7 @@ function renderShell(){
   else if(lost)h='<span class="pill bad"><i></i>Server not answering</span>';
   else{var c=conn||{};h=pill('Router',c.rtr)+pill('Switcher',c.sw&&c.mix);ROOMS.forEach(function(x){h+=pill(x.place,x.up!==false)})}
   $('health').innerHTML=h;
-  $('sidefoot').textContent=(LIVE?(mode==='live'?'Live, watch only. Nothing here can change the hardware.':'Sandbox. Changes are pretend and are discarded when you return to Live.'):'Snapshot. Changes are pretend.')+(VERSION?' Version '+VERSION+'.':'')}
+  $('sidefoot').textContent=(LIVE?(mode==='live'?'Live. Nothing here can change a route. Engineers can rename router ports on the Ports page.':'Sandbox. Changes are pretend and are discarded when you return to Live.'):'Snapshot. Changes are pretend.')+(VERSION?' Version '+VERSION+'.':'')}
 function pill(n,ok){return '<span class="pill '+(ok?'ok':'bad')+'"><i></i>'+esc(n)+(ok?'':' offline')+'</span>'}
 function renderBar(){
   var b=$('bar');
@@ -757,6 +757,31 @@ function readPortsCsv(text,fileName){
   if(dated)warn.push(dated+(dated===1?' value looks':' values look')+' like a date. A spreadsheet may have changed a name such as "1-2" into one. Check those rows before saving.');
   if(badStatus)warn.push(badStatus+(badStatus===1?' Status value was not recognised and was left as it was.':' Status values were not recognised and were left as they were.')+' Use: Spare, Not working, Planned, or leave it empty.');
   return {name:fileName,changes:changes,warn:warn}}
+/* Renaming on the router. This is the one place the app changes a device, and only for an engineer who has entered the PIN.
+   Nothing is sent until the list has been reviewed and confirmed, and each batch can be undone. */
+var renameOpen=false,renameSkip={},renameBusy=false,renameFail=null;
+function renameList(){return portRows('rtr','in').concat(portRows('rtr','out')).filter(function(r){return r.checks.indexOf('Rename')>=0})}
+function renameSend(changes,undo){
+  if(renameBusy||!changes.length)return;renameBusy=true;renameFail=null;render();
+  fetch('labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dev:'rtr',undo:!!undo,changes:changes})}).then(function(r){
+    if(r.ok)return r.json();return r.text().then(function(t){throw new Error(t||'The router was not changed.')})}).then(function(j){
+    renameBusy=false;renameOpen=false;renameSkip={};renameFail=j.failed&&j.failed.length?j.failed:null;
+    say(j.done+(j.done===1?' port renamed on the router.':' ports renamed on the router.')+(renameFail?' '+renameFail.length+' could not be renamed.':''),renameFail?'bad':'info');render()}).catch(function(e){
+    renameBusy=false;portErr=e&&e.message?e.message:'The router was not changed. Try again.';render()})}
+function renameHtml(){
+  var h='<section class="card panel"><h2>Rename on the router</h2>',list=renameList(),picked=list.filter(function(r){return !renameSkip[r.dir+r.n]});
+  if(!auth.pinSet){return h+'<p class="note">Renaming is switched off until an Engineer PIN is set. With a PIN, only someone who has entered it can change names on the router.</p></section>'}
+  if(renameFail){h+='<p class="note" style="color:var(--bad);margin-bottom:6px">These were not renamed:</p><ul class="finds">'+renameFail.map(function(f){return '<li>'+(f.dir==='in'?'Input ':'Output ')+(f.port+1)+' to "'+esc(f.to)+'". '+esc(f.why||'')+'</li>'}).join('')+'</ul>'}
+  if(!list.length)h+='<p class="note">Every router label already matches the name it should carry. There is nothing to rename.</p>';
+  else if(!renameOpen)h+='<p class="note" style="margin-bottom:10px">'+list.length+(list.length===1?' router port has':' router ports have')+' a label that differs from the name under "Should be". You can send the new names to the router from here. Only labels change: no route, lock or other setting is touched.</p><div class="field"><button type="button" class="btn primary" data-act="rename-open">Review '+list.length+(list.length===1?' rename':' renames')+'</button></div>';
+  else{h+='<p class="note" style="margin-bottom:8px">Untick any port to leave it as it is. Nothing is sent until you choose Rename and confirm. Control panels and multiviewers show new names straight away.</p>';
+    h+='<div class="scroll" style="max-height:380px;overflow:auto"><table><thead><tr><th style="width:44px"></th><th>Port</th><th>Label now</th><th>Will become</th></tr></thead><tbody>';
+    list.forEach(function(r){var k=r.dir+r.n;h+='<tr><td><input type="checkbox" data-rn="'+k+'"'+(renameSkip[k]?'':' checked')+' aria-label="Rename '+(r.dir==='in'?'input ':'output ')+r.no+'"></td><td>'+(r.dir==='in'?'Input ':'Output ')+r.no+'</td><td>'+esc(r.l)+'</td><td>'+esc(r.target)+r.checks.filter(function(c){return c!=='Rename'}).map(function(c){return ' <span class="chip warn">'+esc(c)+'</span>'}).join('')+'</td></tr>'});
+    h+='</tbody></table></div><div class="field" style="margin-top:12px"><button type="button" class="btn primary" data-act="rename-go"'+(picked.length&&!renameBusy?'':' disabled')+'>'+(renameBusy?'Sending…':'Rename '+picked.length+(picked.length===1?' port':' ports')+' on the router')+'</button><button type="button" class="btn" data-act="rename-all">Tick all</button><button type="button" class="btn" data-act="rename-none">Untick all</button><button type="button" class="btn" data-act="rename-close">Cancel</button></div>'}
+  if(RENAMES.length){h+='<h2 style="margin-top:16px">Recent renames</h2><div class="rows" style="border-top:1px solid var(--line)">';
+    RENAMES.forEach(function(e){var c=e.changes||[];h+='<div class="row" style="cursor:default;padding-left:0;padding-right:0"><div class="nm"><b>'+c.length+(c.length===1?' port':' ports')+(e.undo?' put back':' renamed')+'</b><small style="font-family:var(--sans);font-size:12px">'+esc(new Date(e.t).toLocaleString(undefined,{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}))+' · '+esc(c.slice(0,2).map(function(x){return '"'+x.from+'" to "'+x.to+'"'}).join(', '))+(c.length>2?' and '+(c.length-2)+' more':'')+'</small></div><div class="tags"><button type="button" class="btn" data-act="rename-undo" data-id="'+esc(e.id)+'"'+(renameBusy?' disabled':'')+'>Undo</button></div></div>'});
+    h+='</div>'}
+  return h+'</section>'}
 function renderPorts(){
   var devs=portDevs(),dev=portDevOf(portDev);portDev=dev.key;
   var isR=dev.key==='rtr',rows=portRows(dev.key,portDir),needle=portQ.trim().toLowerCase(),h='',plates=isR&&!!PORTS.plates[portDir];
@@ -776,6 +801,7 @@ function renderPorts(){
     h+='<div class="field devline"><label class="devk" for="pl-in">Plates wired to inputs</label><input type="text" id="pl-in" value="'+esc(PORTS.plates.in||'')+'" placeholder="RTR-IN-{n}" style="max-width:200px"></div>';
     h+='<div class="field devline"><label class="devk" for="pl-out">Plates wired from outputs</label><input type="text" id="pl-out" value="'+esc(PORTS.plates.out||'')+'" placeholder="RTR-OUT-{n}" style="max-width:200px"></div>'}
   h+='<div class="field devline"><span class="devk">Spreadsheet</span><button type="button" class="btn" data-act="ports-export">Export as CSV</button>'+(LIVE?'<label class="btn" for="ports-file" style="cursor:pointer">Import a CSV</label><input type="file" id="ports-file" accept=".csv,text/csv,text/plain" style="position:absolute;width:1px;height:1px;opacity:0">':'')+'<span class="note">Every device in one file. Opens in Excel or Google Sheets. Keep the Device, Direction and Port columns as they are.</span></div></section>';
+  if(LIVE&&role==='engineer')h+=renameHtml();
   var nRec=rows.filter(function(r){return r.room||r.connected||r.status||r.notes||r.want}).length,nRen=rows.filter(function(r){return r.checks.indexOf('Rename')>=0}).length,nOther=rows.filter(function(r){return r.checks.some(function(c){return c!=='Rename'})}).length;
   h+='<div class="field"><label for="port-dev" style="font-weight:500">Device</label><select id="port-dev">'+devs.map(function(d){return '<option value="'+esc(d.key)+'"'+(d.key===dev.key?' selected':'')+'>'+esc(d.name)+'</option>'}).join('')+'</select><div class="seg" role="group" aria-label="Which ports"><button type="button" data-portdir="in" class="'+(portDir==='in'?'on':'')+'" aria-pressed="'+(portDir==='in')+'">Inputs</button><button type="button" data-portdir="out" class="'+(portDir==='out'?'on':'')+'" aria-pressed="'+(portDir==='out')+'">Outputs</button></div><input type="search" id="port-q" placeholder="Camera" aria-label="Filter the port list" value="'+esc(portQ)+'"><label class="check"><input type="checkbox" id="port-only"'+(portOnly?' checked':'')+'>Only ports to check</label></div>';
   h+='<div class="field"><span class="chip">'+rows.length+' ports</span><span class="chip">'+nRec+' recorded</span>'+(nRen?'<span class="chip warn">'+nRen+' to rename</span>':!rows.some(function(r){return r.target})?'<span class="chip">'+(isR?'No plate pattern or new labels yet, so names are not checked':'No new labels recorded, so names are not checked')+'</span>':'<span class="chip ok">Every name matches</span>')+(nOther?'<span class="chip warn">'+nOther+' other to check</span>':'')+'</div>';
@@ -792,11 +818,11 @@ function renderPorts(){
     if(open){var d=portDraft,f=function(k,label,ph,hint){return '<div class="field devline"><label class="devk" for="pt-'+k+'">'+label+'</label><input type="text" id="pt-'+k+'" data-pt="'+k+'" value="'+esc(d[k]||'')+'" placeholder="'+esc(ph)+'" maxlength="'+(k==='notes'?200:60)+'" style="max-width:'+(k==='notes'?420:260)+'px">'+(hint?'<span class="note">'+hint+'</span>':'')+'</div>'};
       h+='<tr class="devedit"><td colspan="'+span+'">'+f('room','Plate is in','Main hall, stage left','')+f('connected','Connected','Handheld camera',r.auto?'The app already knows this port goes to: '+esc(r.auto)+'.':'What is plugged in at the far end.'+(isR&&plates?' It becomes the second part of the standard name.':''));
       h+='<div class="field devline"><label class="devk" for="pt-status">Status</label><select id="pt-status" data-pt="status">'+PORT_STATUS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(d.status||'')?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>';
-      h+=f('notes','Notes','Cable replaced March 2026','Only engineers see notes.')+f('want','New label',r.prop,(r.prop?'Leave this empty to use the standard name, '+esc(r.prop)+'. Fill it in only for a port that needs a different name.':'The name this port should carry.')+' It is recorded here and compared with the hardware; the device is not changed.');
+      h+=f('notes','Notes','Cable replaced March 2026','Only engineers see notes.')+f('want','New label',r.prop,(r.prop?'Leave this empty to use the standard name, '+esc(r.prop)+'. Fill it in only for a port that needs a different name.':'The name this port should carry.')+' Saving this records it and changes nothing on the device.');
       h+='<div class="field devline"><span class="devk"></span><button type="button" class="btn primary" data-act="port-save">Save</button><button type="button" class="btn" data-act="port-cancel">Cancel</button></div></td></tr>'}});
   if(!rows.length)h+='<tr><td colspan="'+span+'">'+(portOnly&&!needle?'Nothing here needs checking.':'No port matches that.')+'</td></tr>';
   h+='</tbody></table></div></section>';
-  h+='<p class="note">"Should be" is the name each port ought to carry. Grey there is the standard name the app proposes; grey under Connected is what the app already knows from ties and the Devices page. "Rename" means the device\'s label is different. This page only records and checks. It never changes a name on a device.'+(LIVE?'':' Editing and importing need the live server.')+'</p>';
+  h+='<p class="note">"Should be" is the name each port ought to carry. Grey there is the standard name the app proposes; grey under Connected is what the app already knows from ties and the Devices page. "Rename" means the device\'s label is different. Recording and checking change nothing on a device. Router names change only when you send them from "Rename on the router" above.'+(LIVE?'':' Editing and importing need the live server.')+'</p>';
   $('main').innerHTML=h}
 
 /* ---------- system map ---------- */
@@ -1327,6 +1353,14 @@ document.addEventListener('click',function(e){
     else if(a==='dismiss'){toast=null;renderBar()}
     else if(a==='mapclear'){mapSel=null;render()}
     else if(a==='port-edit'){var pe={dev:b.dataset.dev,dir:b.dataset.dir,n:+b.dataset.n};if(portOpen&&portOpen.dev===pe.dev&&portOpen.dir===pe.dir&&portOpen.n===pe.n){portOpen=null;portDraft=null}else{var pr0=portStore(pe.dev)[pe.dir][pe.n]||{};portOpen=pe;portDraft={room:pr0.room||'',connected:pr0.connected||'',status:pr0.status||'',notes:pr0.notes||'',want:pr0.want||''}}render()}
+    else if(a==='rename-open'){renameOpen=true;renameFail=null;render()}
+    else if(a==='rename-close'){renameOpen=false;renameSkip={};render()}
+    else if(a==='rename-all'){renameSkip={};render()}
+    else if(a==='rename-none'){renameList().forEach(function(r){renameSkip[r.dir+r.n]=true});render()}
+    else if(a==='rename-go'){var rl=renameList().filter(function(r){return !renameSkip[r.dir+r.n]}).map(function(r){return {dir:r.dir,port:r.n,from:r.l,to:r.target}});
+      if(rl.length){pending={raw:true,yes:'Rename '+rl.length+(rl.length===1?' port':' ports'),text:'Change '+rl.length+(rl.length===1?' label':' labels')+' on the router now? Control panels and multiviewers will show the new names straight away. No route is changed, and this can be undone from the Ports page.',fn:function(){renameSend(rl,false)}};renderBar()}}
+    else if(a==='rename-undo'){var ru=RENAMES.filter(function(x){return x.id===b.dataset.id})[0];
+      if(ru){var back=ru.changes.map(function(c){return {dir:c.dir,port:c.port,from:c.to,to:c.from}});pending={raw:true,yes:'Put them back',text:'Put '+back.length+(back.length===1?' router label':' router labels')+' back to what '+(back.length===1?'it was':'they were')+' before that rename? A port renamed again since then is left alone.',fn:function(){renameSend(back,true)}};renderBar()}}
     else if(a==='port-cancel'){portOpen=null;portDraft=null;render()}
     else if(a==='port-save'){if(portOpen&&portDraft){var ps={dev:portOpen.dev,dir:portOpen.dir,port:portOpen.n,room:portDraft.room,connected:portDraft.connected,status:portDraft.status,notes:portDraft.notes,want:portDraft.want};portOpen=null;portDraft=null;portsPost({set:[ps]},'Saved for everyone.');render()}}
     else if(a==='ports-export'){var blob=new Blob([portsCsv()],{type:'text/csv;charset=utf-8'}),lnk=document.createElement('a');lnk.href=URL.createObjectURL(blob);lnk.download='venue-router-ports.csv';document.body.appendChild(lnk);lnk.click();lnk.remove();setTimeout(function(){URL.revokeObjectURL(lnk.href)},1000)}
@@ -1417,6 +1451,7 @@ document.addEventListener('change',function(e){var t=e.target;
   else if(t.id==='ports-file'){var pf=t.files&&t.files[0];if(!pf)return;
     if(pf.size>2*1024*1024){portImport={name:pf.name,error:'That file is over 2 MB, which is far more than a port list. Check it is the right file.'};render();return}
     var rd=new FileReader();rd.onload=function(){portImport=readPortsCsv(String(rd.result),pf.name);if(!portImport.name)portImport.name=pf.name;render();window.scrollTo(0,0)};rd.onerror=function(){portImport={name:pf.name,error:'That file could not be read.'};render()};rd.readAsText(pf)}
+  else if(t.dataset.rn){if(t.checked)delete renameSkip[t.dataset.rn];else renameSkip[t.dataset.rn]=true;render()}
   else if(t.id==='port-dev'){portDev=t.value;portOpen=null;portDraft=null;render()}
   else if(t.id==='port-only'){portOnly=t.checked;render()}
   else if(t.id==='pl-in'||t.id==='pl-out'){var pli=$('pl-in').value.trim(),plo=$('pl-out').value.trim();

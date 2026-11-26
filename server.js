@@ -1,4 +1,5 @@
-// Live, watch-only server for Venue Router.
+// Live server for Venue Router. It watches, with one exception: an engineer can rename ports on the main router
+// (see setLabels and the /labels route). It never changes a route, a lock or any other setting on any device.
 // Holds one connection to the router and two to the ATEM (routing and mix state), and pushes every change to the page.
 // It never changes a device. Routers and switchers are only listened to. HyperDeck recorders are asked for their
 // status, because they report nothing unless asked. Teranex converters and SmartView monitors are only listened to.
@@ -26,10 +27,20 @@ const log = msg => console.log(new Date().toISOString().replace('T', ' ').slice(
 // Videohub Ethernet Protocol listener. Reads the status dump and every later update block.
 function hub(ip, onChange) {
   const st = { model: null, name: null, inL: [], outL: [], route: [], lock: [], up: false };
-  let buf = '', closed = false, sock = null;
+  let buf = '', closed = false, sock = null, waiting = null;
   Object.defineProperty(st, 'stop', { enumerable: false, value: () => { closed = true; if (sock) sock.destroy(); } });
+  // The only thing this app ever writes to a device: new names for ports. list is [{port, to}], counted from 0.
+  // The device answers ACK or NAK, then reports the new labels itself, which is what updates st.
+  Object.defineProperty(st, 'setLabels', { enumerable: false, value: (dir, list) => new Promise((resolve, reject) => {
+    if (!sock || !st.up) return reject(new Error('The router is not answering.'));
+    if (waiting) return reject(new Error('Another rename is still being sent. Try again in a moment.'));
+    const t = setTimeout(() => { waiting = null; reject(new Error('The router did not confirm the change.')); }, 5000);
+    waiting = ok => { clearTimeout(t); ok ? resolve() : reject(new Error('The router refused the change.')); };
+    sock.write((dir === 'in' ? 'INPUT LABELS:' : 'OUTPUT LABELS:') + '\n' + list.map(c => c.port + ' ' + c.to).join('\n') + '\n\n');
+  }) });
   function block(lines) {
     const head = lines[0].replace(/:$/, '');
+    if (head === 'ACK' || head === 'NAK') { if (waiting) { const w = waiting; waiting = null; w(head === 'ACK'); } return; }
     const each = fn => lines.slice(1).forEach(l => { const m = l.match(/^(\d+) (.*)$/); if (m) fn(+m[1], m[2]); });
     if (head === 'INPUT LABELS') each((i, v) => (st.inL[i] = v));
     else if (head === 'OUTPUT LABELS') each((i, v) => (st.outL[i] = v));
@@ -526,7 +537,45 @@ function publicPorts() {
 let ports = cleanPorts(null);
 try { ports = cleanPorts(JSON.parse(fs.readFileSync(PORTS_FILE, 'utf8'))); } catch (e) {}
 
-const GUARDED = ['/normal', '/spaces', '/prefs', '/devices', '/floor-image', '/floor-pins', '/ports'];
+// Renames sent to the router, newest first, so the last few can be undone. Each is { id, t, undo, changes: [{dir, port, from, to}] }.
+const LABELS_FILE = dataFile('label-history.json');
+let labelHistory = [];
+try { const lh = JSON.parse(fs.readFileSync(LABELS_FILE, 'utf8')); if (Array.isArray(lh)) labelHistory = lh.slice(0, 20); } catch (e) {}
+async function renameRouterPorts(body) {
+  if (!authCfg) throw new Error('Set an Engineer PIN before renaming ports, so that only someone who has entered it can change the router.');
+  if (!body || body.dev !== 'rtr') throw new Error('Only the main router can be renamed from here.');
+  if (!rtr.up) throw new Error('The router is not answering.');
+  const asked = Array.isArray(body.changes) ? body.changes.slice(0, 500) : [], good = [], failed = [], seen = new Set();
+  for (const c of asked) {
+    if (!c || (c.dir !== 'in' && c.dir !== 'out') || !Number.isInteger(c.port)) continue;
+    const labels = c.dir === 'in' ? rtr.inL : rtr.outL, key = c.dir + c.port, to = typeof c.to === 'string' ? c.to.trim() : '';
+    if (c.port < 0 || c.port >= labels.length || seen.has(key)) continue;
+    seen.add(key);
+    const one = { dir: c.dir, port: c.port, from: labels[c.port], to };
+    if (typeof c.from !== 'string' || c.from !== labels[c.port]) failed.push({ ...one, why: 'The router label changed since the list was made.' });
+    else if (!to || to.length > 60 || !/^[\x20-\x7e]+$/.test(to)) failed.push({ ...one, why: 'Use 1 to 60 plain letters, numbers and punctuation.' });
+    else if (to !== labels[c.port]) good.push(one);
+  }
+  if (!good.length && !failed.length) throw new Error('There was nothing to rename.');
+  for (const dir of ['in', 'out']) {
+    const part = good.filter(c => c.dir === dir);
+    if (part.length) await rtr.setLabels(dir, part);
+  }
+  // The router reports its new labels on its own. Give that a moment, then keep only what it really took.
+  const now = c => (c.dir === 'in' ? rtr.inL : rtr.outL)[c.port];
+  for (let i = 0; i < 30 && good.some(c => now(c) !== c.to); i++) await new Promise(r => setTimeout(r, 100));
+  const done = good.filter(c => now(c) === c.to);
+  good.filter(c => now(c) !== c.to).forEach(c => failed.push({ ...c, why: 'The router reports "' + now(c) + '" instead.' }));
+  if (done.length) {
+    labelHistory.unshift({ id: Date.now().toString(36), t: new Date().toISOString(), undo: !!body.undo, changes: done });
+    labelHistory = labelHistory.slice(0, 20);
+    fs.writeFileSync(LABELS_FILE, JSON.stringify(labelHistory, null, 1));
+    log('An engineer renamed ' + done.length + (done.length === 1 ? ' router port' : ' router ports') + (body.undo ? ' (undoing an earlier rename).' : '.'));
+  }
+  return { done: done.length, failed };
+}
+
+const GUARDED = ['/normal', '/spaces', '/prefs', '/devices', '/floor-image', '/floor-pins', '/ports', '/labels'];
 
 const clients = new Map();
 let lastBody = '', lastJson = null, lastPublic = null, timer = null;
@@ -551,7 +600,7 @@ function push() {
     places: venue.places, links: venue.links, addr: { rtr: core.router, sw: core.switcher },
     ties: venue.ties || null, common: venue.common || null, names: venue.niceNames || null,
     floor: { pins: floor.pins, hasImage: !!floor.imageType, v: floor.v },
-    spaces, prefs, ports,
+    spaces, prefs, ports, renames: labelHistory.slice(0, 5),
     decks: decks.map(d => ({ id: d.id, place: d.place, ip: d.ip, feed: d.feed, returns: d.returns, ...d.st, up: d.st.up })),
     convs: convs.map(c => ({ id: c.id, place: c.place, ip: c.ip, feeds: c.feeds, returns: c.returns, ...c.st, up: c.st.up })),
     mons: mons.map(m => ({ id: m.id, place: m.place, ip: m.ip, feeds: m.feeds, ...m.st, up: m.st.up })),
@@ -563,7 +612,7 @@ function push() {
   // Device addresses only go to engineers. Everyone else gets the same state without them.
   const taken = '{"taken":"' + new Date().toISOString() + '",';
   lastJson = taken + body.slice(1);
-  lastPublic = taken + JSON.stringify({ ...data, addr: {}, ports: publicPorts(), rooms: data.rooms.map(({ ip, ...r }) => r), decks: data.decks.map(({ ip, ...d }) => d), convs: data.convs.map(({ ip, ...c }) => c), mons: data.mons.map(({ ip, ...m }) => m), ndis: data.ndis.map(({ ip, ...n }) => n) }).slice(1);
+  lastPublic = taken + JSON.stringify({ ...data, addr: {}, ports: publicPorts(), renames: [], rooms: data.rooms.map(({ ip, ...r }) => r), decks: data.decks.map(({ ip, ...d }) => d), convs: data.convs.map(({ ip, ...c }) => c), mons: data.mons.map(({ ip, ...m }) => m), ndis: data.ndis.map(({ ip, ...n }) => n) }).slice(1);
   for (const [res, eng] of clients) res.write('data: ' + (eng ? lastJson : lastPublic) + '\n\n');
 }
 
@@ -855,6 +904,12 @@ http.createServer((req, res) => {
       fs.writeFileSync(SPACES_FILE, JSON.stringify(spaces, null, 1));
       res.writeHead(204); res.end(); push();
     }).catch(() => { res.writeHead(400); res.end('Bad spaces'); });
+    return;
+  }
+  if (url === '/labels' && req.method === 'POST') {
+    readBody(req, 256 * 1024).then(buf => renameRouterPorts(JSON.parse(buf.toString('utf8'))))
+      .then(out => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(out)); lastBody = ''; push(); })
+      .catch(e => { res.writeHead(422, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(e && e.message ? e.message : 'That did not work.'); });
     return;
   }
   if (url === '/ports' && req.method === 'POST') {

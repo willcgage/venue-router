@@ -4,7 +4,7 @@ A web console that shows what every screen in a building is displaying and trace
 
 There is no installer yet. See [Download and install](#download-and-install) for the steps to set it up by hand.
 
-**It is watch-only.** Nothing in this project sends a command that changes a device. Routers and switchers are only listened to, and recorders are only asked for their status. Changes made in the page are either refused (Live) or pretend (Sandbox).
+**It watches, with one exception.** Nothing in this project changes a route, a lock, a recording or any other setting on a device. Routers and switchers are listened to, and recorders are only asked for their status. Routing changes made in the page are either refused (Live) or pretend (Sandbox). The exception is port names on the main router: an engineer who has entered the PIN can send new names to it from the Ports page, after reviewing and confirming them. See "Renaming on the router" below.
 
 ## What it does
 
@@ -307,7 +307,7 @@ Without Git, download the ZIP again into a new folder and copy your setup files 
 
 Everything about your venue is in these files. An installed copy keeps them in its data folder (`C:ProgramDataVenue Router` on Windows, `/Library/Application Support/Venue Router/data` on a Mac). A copy installed by hand keeps them inside its own folder. None of them are part of the download, so back them up, and copy them to move to another computer:
 
-`venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
+`venue.json`, `spaces.json`, `prefs.json`, `ports.json`, `label-history.json`, `floor.json`, `floor-image.bin`, `normal-service.json`
 
 `auth.json` holds the PIN. Leave it behind when moving and set the PIN again.
 
@@ -439,7 +439,27 @@ The standard name is shown in grey under "Should be". To give one port a differe
 - The switcher and room switchers have no plates, so they are checked only where a new label has been entered.
 - With no plate pattern and no new labels, nothing is checked.
 
-The check tells you what to change. The names themselves are changed in Videohub Setup and ATEM Setup: this page only records and checks, and never changes a name on a device. Router names in this style still work with everything else in the app, including the cabling it reads from labels such as `REC-IN-01`.
+The check tells you what to change. Recording and checking change nothing on a device. Router names in this style still work with everything else in the app, including the cabling it reads from labels such as `REC-IN-01`.
+
+#### Renaming on the router
+
+Router names can be typed into Videohub Setup, or sent from the Ports page. This is the only thing the app ever writes to a device.
+
+1. Under **Rename on the router**, choose "Review renames". The list shows every router port whose label differs from "Should be", with the label now and what it will become.
+2. Untick any port to leave it alone.
+3. Choose "Rename ports on the router" and confirm.
+
+What keeps it safe:
+
+- **Engineers only.** The server refuses a rename from anyone without an Engineer session, and refuses all renames until an Engineer PIN has been set. The Volunteer view has no way to ask.
+- **Names only.** The app sends port labels and nothing else. It has no code that sends a route, a lock or any other setting.
+- **Nothing is sent unseen.** Every rename is listed and confirmed first. If a label on the router changed after the list was made, that port is skipped and reported.
+- **The router has the last word.** After sending, the app reads back what the router reports and lists any port it did not take.
+- **Undo.** The last few renames are listed under "Recent renames", each with Undo, which puts those labels back. A port renamed again since then is left alone. The history is kept in `label-history.json`.
+
+Names are limited to 60 plain letters, numbers and punctuation. New names appear on control panels and multiviewers straight away, so a service is not the time to rename.
+
+Only the main router can be renamed from the app. Switcher names are checked here but still changed in ATEM Setup.
 
 #### Spreadsheets
 
@@ -597,6 +617,7 @@ Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.js
 - **Routes, labels and locks** come from the Videohub Ethernet Protocol on TCP 9990. The ATEM Constellation and ATEM Mini Pro answer this protocol too, which exposes their output routing.
 - **Streaming and recording state** of a room switcher comes from the same ATEM protocol, on a listen-only connection.
 - **Recorder state** comes from the HyperDeck Ethernet Protocol on TCP 9993, using status queries and change notifications only.
+- **Renaming** uses the same Videohub connection as reading: the app sends an `INPUT LABELS` or `OUTPUT LABELS` block, waits for the router to acknowledge it, and then relies on the router's own report of its labels.
 - **Converter state** comes from the Teranex Ethernet Protocol on TCP 9800, listen only.
 - **Monitor state** comes from the SmartView Ethernet Protocol on TCP 9992, listen only.
 - **Mix state** (what is on each M/E, and which keys are on air) comes from the ATEM's own protocol through the [atem-connection](https://www.npmjs.com/package/atem-connection) library.
