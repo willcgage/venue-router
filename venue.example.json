@@ -10,6 +10,7 @@
   "decks": [],
   "convs": [],
   "mons": [],
+  "ndis": [],
   "links": [
     { "room": "room-chapel", "rtrOut": 15, "input": null }
   ]

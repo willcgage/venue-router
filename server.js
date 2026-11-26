@@ -2,6 +2,8 @@
 // Holds one connection to the router and two to the ATEM (routing and mix state), and pushes every change to the page.
 // It never changes a device. Routers and switchers are only listened to. HyperDeck recorders are asked for their
 // status, because they report nothing unless asked. Teranex converters and SmartView monitors are only listened to.
+// Magewell NDI converters are asked only for what they answer without signing in: that they are there, and on newer
+// units the picture format. The app never signs in to them and stores no password for them.
 // No route, record, play or settings command is ever sent.
 // Usage: node server.js [router-ip] [switcher-ip] [--data=folder]     (PORT and HOST can be set in the environment)
 // The two addresses can be left out. If none are saved yet, the app shows a first-time setup page that asks for them.
@@ -219,7 +221,7 @@ function readLive(s) {
 
 // venue.json says where each device is, which rooms have their own switcher, and how rooms are cabled to the core.
 const VENUE_FILE = dataFile('venue.json');
-let venue = { places: {}, core: {}, rooms: [], decks: [], convs: [], mons: [], links: [] };
+let venue = { places: {}, core: {}, rooms: [], decks: [], convs: [], mons: [], ndis: [], links: [] };
 try { venue = { ...venue, ...JSON.parse(fs.readFileSync(VENUE_FILE, 'utf8')) }; } catch (e) { console.log('No venue.json found, so no rooms are shown.'); }
 const core = { router: args[0] || (venue.core || {}).router, switcher: args[1] || (venue.core || {}).switcher };
 // Nothing saved yet: show the first-time setup page instead of the app. Once it has saved the two addresses it
@@ -267,6 +269,52 @@ function probeConv(ip, ms) {
     s.on('data', d => { text += d.toString('utf8'); if (/Model name: .*\r?\n/.test(text)) finish(); });
     s.on('error', finish); s.on('close', finish);
   });
+}
+
+// Magewell Pro Convert (an NDI encoder or decoder). Everything here is a plain web request that needs no sign-in.
+function mwGet(ip, pathName, ms, raw) {
+  return new Promise(resolve => {
+    const q = http.get({ host: ip, port: 80, path: pathName, timeout: ms }, res => {
+      let b = ''; res.setEncoding('utf8');
+      res.on('data', d => { if (b.length < 20000) b += d; });
+      res.on('end', () => { if (raw) return resolve({ server: String(res.headers.server || ''), body: b }); try { resolve(JSON.parse(b)); } catch (e) { resolve(null); } });
+    });
+    q.on('error', () => resolve(null)); q.on('timeout', () => { q.destroy(); resolve(null); });
+  });
+}
+// Is there a Magewell at this address? Asks its "ping", then reads its front page to be sure of the make.
+async function probeNdi(ip, ms) {
+  const ping = await mwGet(ip, '/mwapi?method=ping', ms);
+  if (!ping || ping.status !== 0) return { ip, model: null };
+  const page = await mwGet(ip, '/', ms, true);
+  const yes = page && (/magewell/i.test(page.server) || /pro convert|magewell/i.test(page.body));
+  return { ip, model: yes ? 'Magewell Pro Convert' : null };
+}
+// Watches one unit: asks every ten seconds whether it is there and what picture it reports.
+function magewell(ip, onChange) {
+  const st = { model: 'Magewell Pro Convert', signal: null, up: false };
+  let closed = false, timer = null, last = '', misses = 0;
+  Object.defineProperty(st, 'stop', { enumerable: false, value: () => { closed = true; clearTimeout(timer); } });
+  async function poll() {
+    if (closed) return;
+    const ping = await mwGet(ip, '/mwapi?method=ping', 4000);
+    const ok = !!ping && ping.status === 0;
+    misses = ok ? 0 : misses + 1;
+    let signal = st.signal;
+    if (ok) {
+      const s = await mwGet(ip, '/mwapi?method=get-signal-info', 4000), v = s && s['video-info'];
+      signal = v && +v.width ? { w: +v.width, h: +v.height, scan: v.scan === 'interlaced' ? 'i' : 'p', rate: +v['field-rate'] || 0 } : null;
+    }
+    if (closed) return;
+    // One missed answer is not treated as the unit going away
+    st.up = ok || (st.up && misses < 2);
+    st.signal = st.up ? signal : null;
+    const now = JSON.stringify([st.up, st.signal]);
+    if (now !== last) { last = now; onChange(); }
+    timer = setTimeout(poll, 10000);
+  }
+  poll();
+  return st;
 }
 
 // Finding devices. A probe connects to the Videohub port, reads the greeting and disconnects. It sends nothing.
@@ -366,7 +414,7 @@ function firstTimeSetup() {
     log('Venue Router is not set up yet. Open http://localhost:' + PORT + ' on this computer and enter the router and switcher addresses.');
   });
 }
-function knownIps() { return [core.router, core.switcher].concat(rooms.map(r => r.ip), decks.map(d => d.ip), convs.map(c => c.ip), mons.map(m => m.ip)); }
+function knownIps() { return [core.router, core.switcher].concat(rooms.map(r => r.ip), decks.map(d => d.ip), convs.map(c => c.ip), mons.map(m => m.ip), ndis.map(n => n.ip)); }
 
 // Floor plan: pin positions live in floor.json, the plan image in floor-image.bin. Both are local files only.
 const FLOOR_FILE = dataFile('floor.json');
@@ -455,10 +503,11 @@ function push() {
   if (!rtr.route.length || !sw.route.length) return;
   rooms.forEach(ensureLive);
   const ups = { 'The main router': rtr.up, 'The main switcher': sw.up && mixUp };
-  rooms.forEach(r => { ups['The ' + r.place + ' switcher'] = r.st.up; });
+  rooms.forEach(r => { ups['The ' + r.place + ' switcher' + (rooms.filter(x => x.place === r.place).length > 1 ? ' at ' + r.ip : '')] = r.st.up; });
   decks.forEach(d => { ups['Recorder ' + (d.st.name || d.id)] = d.st.up; });
   convs.forEach(c => { ups['Converter ' + (c.st.name || c.id)] = c.st.up; });
   mons.forEach(m => { ups['Monitor ' + (m.st.name || m.id)] = m.st.up; });
+  ndis.forEach(n => { ups['NDI converter ' + (n.name || n.id)] = n.st.up; });
   for (const k of Object.keys(ups)) { if (upSeen[k] !== undefined && upSeen[k] !== ups[k]) log(k + (ups[k] ? ' is answering again.' : ' stopped answering.')); upSeen[k] = ups[k]; }
   const strip = ({ up, ...rest }) => rest;
   const data = { rtr: strip(rtr), sw: { ...strip(sw), mix }, conn: { rtr: rtr.up, sw: sw.up, mix: mixUp }, normal, pin: !!authCfg,
@@ -469,6 +518,7 @@ function push() {
     decks: decks.map(d => ({ id: d.id, place: d.place, ip: d.ip, feed: d.feed, returns: d.returns, ...d.st, up: d.st.up })),
     convs: convs.map(c => ({ id: c.id, place: c.place, ip: c.ip, feeds: c.feeds, returns: c.returns, ...c.st, up: c.st.up })),
     mons: mons.map(m => ({ id: m.id, place: m.place, ip: m.ip, feeds: m.feeds, ...m.st, up: m.st.up })),
+    ndis: ndis.map(n => ({ id: n.id, place: n.place, name: n.name, ip: n.ip, ...n.st, up: n.st.up })),
     rooms: rooms.filter(r => r.st.route.length).map(r => ({ id: r.id, place: r.place, ip: r.ip, model: r.st.model, name: r.st.name, inL: r.st.inL, outL: r.st.outL, route: r.st.route, up: r.st.up, live: r.live || null })) };
   const body = JSON.stringify(data);
   if (body === lastBody) return;
@@ -476,7 +526,7 @@ function push() {
   // Device addresses only go to engineers. Everyone else gets the same state without them.
   const taken = '{"taken":"' + new Date().toISOString() + '",';
   lastJson = taken + body.slice(1);
-  lastPublic = taken + JSON.stringify({ ...data, addr: {}, rooms: data.rooms.map(({ ip, ...r }) => r), decks: data.decks.map(({ ip, ...d }) => d), convs: data.convs.map(({ ip, ...c }) => c), mons: data.mons.map(({ ip, ...m }) => m) }).slice(1);
+  lastPublic = taken + JSON.stringify({ ...data, addr: {}, rooms: data.rooms.map(({ ip, ...r }) => r), decks: data.decks.map(({ ip, ...d }) => d), convs: data.convs.map(({ ip, ...c }) => c), mons: data.mons.map(({ ip, ...m }) => m), ndis: data.ndis.map(({ ip, ...n }) => n) }).slice(1);
   for (const [res, eng] of clients) res.write('data: ' + (eng ? lastJson : lastPublic) + '\n\n');
 }
 
@@ -489,6 +539,8 @@ let convs = (venue.convs || []).map(c => ({ id: c.id, place: c.place, ip: c.ip, 
 const saveConvs = () => { venue.convs = convs.map(c => ({ id: c.id, place: c.place, ip: c.ip, feeds: c.feeds, returns: c.returns })); };
 let mons = (venue.mons || []).map(m => ({ id: m.id, place: m.place, ip: m.ip, feeds: m.feeds || [], st: smartview(m.ip, changed) }));
 const saveMons = () => { venue.mons = mons.map(m => ({ id: m.id, place: m.place, ip: m.ip, feeds: m.feeds })); };
+let ndis = (venue.ndis || []).map(n => ({ id: n.id, place: n.place, name: n.name || '', ip: n.ip, st: magewell(n.ip, changed) }));
+const saveNdis = () => { venue.ndis = ndis.map(n => ({ id: n.id, place: n.place, name: n.name, ip: n.ip })); };
 // Works out which router output feeds a monitor from its name: a monitor named MON-12 matches a label such as "MON 12".
 function guessMonFeeds(name) {
   const num = (String(name || '').match(/(\d{3,})/) || [])[1];
@@ -532,6 +584,15 @@ function ensureLive(r) {
 // Changing the device list. Each change is saved to venue.json and takes effect at once.
 async function deviceChange(body) {
   const place = String(body.place || '').trim().slice(0, 60);
+  // NDI converters: their place, the name you give them (they report none without signing in), and removing them
+  const nd = ndis.find(x => x.id === body.id);
+  if (nd && (body.action === 'place' || body.action === 'ndi-name' || body.action === 'remove')) {
+    if (body.action === 'place') { if (!place) throw new Error('Enter where the device is.'); nd.place = place; }
+    else if (body.action === 'ndi-name') nd.name = String(body.name || '').trim().slice(0, 60);
+    else { nd.st.stop(); ndis = ndis.filter(x => x !== nd); }
+    saveNdis(); saveVenue(); lastBody = ''; changed();
+    return;
+  }
   if (body.action === 'place') {
     if (!place) throw new Error('Enter where the device is.');
     const dk = decks.find(x => x.id === body.id);
@@ -579,6 +640,18 @@ async function deviceChange(body) {
     dk.st.stop();
     decks = decks.filter(x => x !== dk);
     saveDecks();
+  } else if (body.action === 'room-link') {
+    // Which router output feeds a room's switcher, and which of its inputs that lands on
+    const r = rooms.find(x => x.id === body.id);
+    if (!r) throw new Error('That device is no longer in the list.');
+    const port = v => (v === null || v === '' || v === undefined ? null : +v);
+    const out = port(body.rtrOut), inp = port(body.input);
+    if (out !== null && !(Number.isInteger(out) && out >= 0 && out < 1000)) throw new Error('Choose a router output.');
+    if (inp !== null && !(Number.isInteger(inp) && inp >= 0 && inp < 1000)) throw new Error('Choose a switcher input.');
+    const at = venue.links.findIndex(l => l.room === r.id);
+    if (out === null) { if (at >= 0) venue.links.splice(at, 1); }
+    else if (at >= 0) venue.links[at] = { room: r.id, rtrOut: out, input: inp };
+    else venue.links.push({ room: r.id, rtrOut: out, input: inp });
   } else if (body.action === 'remove') {
     const r = rooms.find(x => x.id === body.id);
     if (!r) throw new Error('That device is no longer in the list.');
@@ -592,6 +665,14 @@ async function deviceChange(body) {
     const ip = String(body.ip || '').trim();
     if (!isPrivate(ip)) throw new Error('Enter an address on your own network, such as 10.0.0.20.');
     if (knownIps().includes(ip)) throw new Error('That device is already in the list.');
+    if (body.role === 'ndi') {
+      const m = await probeNdi(ip, 3000);
+      if (!m.model) throw new Error('No Magewell converter answered at that address.');
+      let n = 1; while (ndis.some(x => x.id === 'ndi-' + n)) n++;
+      ndis.push({ id: 'ndi-' + n, place: place || '', name: String(body.name || '').trim().slice(0, 60), ip, st: magewell(ip, changed) });
+      saveNdis(); saveVenue(); lastBody = ''; changed();
+      return;
+    }
     if (body.role === 'mon') {
       const m = await probeMon(ip, 2500);
       if (!m.model) throw new Error('No SmartView monitor answered at that address.');
@@ -707,9 +788,9 @@ http.createServer((req, res) => {
     if (scanning) { res.writeHead(429); res.end('A search is already running. Wait for it to finish.'); return; }
     scanning = true;
     const jobs = [];
-    const deckJobs = [], convJobs = [], monJobs = [];
-    prefixes.forEach(p => { for (let i = 1; i < 255; i++) { jobs.push(probe(p + '.' + i, 1800)); deckJobs.push(probeDeck(p + '.' + i, 1800)); convJobs.push(probeConv(p + '.' + i, 1800)); monJobs.push(probeMon(p + '.' + i, 1800)); } });
-    Promise.all([Promise.all(jobs), Promise.all(deckJobs), Promise.all(convJobs), Promise.all(monJobs)]).then(([all, dks, cvs, mns]) => {
+    const deckJobs = [], convJobs = [], monJobs = [], ndiJobs = [];
+    prefixes.forEach(p => { for (let i = 1; i < 255; i++) { jobs.push(probe(p + '.' + i, 1800)); deckJobs.push(probeDeck(p + '.' + i, 1800)); convJobs.push(probeConv(p + '.' + i, 1800)); monJobs.push(probeMon(p + '.' + i, 1800)); ndiJobs.push(probeNdi(p + '.' + i, 2500)); } });
+    Promise.all([Promise.all(jobs), Promise.all(deckJobs), Promise.all(convJobs), Promise.all(monJobs), Promise.all(ndiJobs)]).then(([all, dks, cvs, mns, nds]) => {
       scanning = false;
       const known = knownIps();
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -718,7 +799,8 @@ http.createServer((req, res) => {
         found: all.filter(d => d.present).map(d => ({ ip: d.ip, model: d.model, name: d.name, inputs: d.inputs, outputs: d.outputs, known: known.includes(d.ip) }))
           .concat(dks.filter(isDeck).map(d => ({ ip: d.ip, model: d.model, kind: 'deck', known: known.includes(d.ip) })))
           .concat(cvs.filter(c => c.model).map(c => ({ ip: c.ip, model: c.model, kind: 'conv', known: known.includes(c.ip) })))
-          .concat(mns.filter(m => m.model).map(m => ({ ip: m.ip, model: m.model, name: m.name, kind: 'mon', known: known.includes(m.ip) }))),
+          .concat(mns.filter(m => m.model).map(m => ({ ip: m.ip, model: m.model, name: m.name, kind: 'mon', known: known.includes(m.ip) })))
+          .concat(nds.filter(n => n.model).map(n => ({ ip: n.ip, model: n.model, kind: 'ndi', known: known.includes(n.ip) }))),
         other: all.filter(d => d.answered && !d.present).length,
       }));
     });

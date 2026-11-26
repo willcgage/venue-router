@@ -84,10 +84,11 @@ The map is for looking, not routing. Selecting a port shows what it feeds or wha
 
 Select a screen on the System map, or choose "Signal path" on any screen elsewhere in the app, to follow its picture:
 
-- The route lights up on the map with moving arrows showing the direction of flow. You can also select a route by clicking its line.
-- Every port on the way is on the map itself. The router boxes name their ports, and the selected switcher and screen boxes gain a second line with their port and room, such as "In 11 → out 10 · Rack Room".
-- Selecting any box on the way, such as "Router in 2", shows every screen that passes through it.
-- The top of the map card names what the screen is showing, with buttons to open its room or clear the selection, and lists any keys on air on its mix.
+- The map is replaced by that one path, drawn as a chain from source to screen with moving arrows showing the direction of flow. It has as many boxes as the path really has: three for a camera sent straight to a screen, six or more for a picture that goes through a mix and on to a room switcher.
+- Each box is one device, such as the router, the switcher, a converter or a room switcher, with the port the picture comes in on and the port it leaves on. A path that ends at a recorder or a monitor ends with that device and its state.
+- **Back to the whole map** returns to the overview. There, selecting any box, such as "Router in 2", shows every screen that passes through it.
+- Above the chain, the card names what the screen is showing, with a button to open its room, and lists any keys on air on its mix.
+- A room switcher's outputs are followed the same way: choose that switcher under **Show**, then select an output. If the room's building feed is set on the Devices page, the chain carries on through the main router to the real source.
 
 The **On now / Plumbing** switch chooses what "the path" means:
 
@@ -202,6 +203,7 @@ The computer must be able to reach these ports on your devices:
 | HyperDeck recorder | TCP 9993 |
 | Teranex converter | TCP 9800 |
 | SmartView monitor | TCP 9992 |
+| Magewell NDI converter | TCP 80 |
 
 ### 2. Download it
 
@@ -371,7 +373,7 @@ Edited by hand:
 - `ties`: the tie-lines between router and switcher. `routerToSwitcher: 20` means router outputs 1 to 20 feed switcher inputs 1 to 20. `switcherToRouter: 8` means switcher outputs 1 to 8 feed router inputs 1 to 8. Without this, paths are not traced through the switcher.
 - `common`: the router inputs (counted from 0) offered first when choosing a source. Left empty, the first 16 named inputs are used.
 - `niceNames`: optional friendlier names for router outputs (`out`, by number counted from 0), sources (`src`, by label) and switcher mixes (`mix`, by number). With any set, Engineer view gets a "Nice names" switch.
-- `links`: which router output (counted from 0) feeds a room, and which input on that room's switcher it lands on. Use `null` if unknown.
+- `links`: which router output (counted from 0) feeds a room, and which input on that room's switcher it lands on. Use `null` if unknown. This can also be set on the Devices page, under each room switcher.
 
 Restart the server after editing `venue.json` by hand.
 
@@ -443,6 +445,18 @@ A HyperDeck reports nothing unless asked, so for recorders the server sends stat
 
 The app traces paths through one main router and one main switcher. Spaces, presets and Normal service refer to the main router's port numbers, so replacing it usually means setting those up again.
 
+### NDI converters
+
+A Magewell Pro Convert added on the Devices page is shown with its status only:
+
+- Whether it is answering, checked every ten seconds. If one stops, it is listed under Check these.
+- On units with newer firmware, the picture it reports, such as 1080p60. Older units do not say, and show "picture not reported".
+- A name and a place that you give it. The unit does not give its own name without a sign-in.
+
+The app never signs in to a Magewell and stores no password for one. It only asks the two questions the unit answers for anyone on the network. Because of that it cannot tell an encoder from a decoder, or show which NDI source a decoder is showing, so NDI converters are not part of any signal path.
+
+NDI devices are usually on their own network. To find them, enter that network's first three numbers under **Find devices on the network**. The computer running the app has to be able to reach that network.
+
 ### Spaces
 
 Spaces are the rooms volunteers see, each with its screens and quick settings. An engineer sets them up in the app, under **Spaces** in the Engineer menu:
@@ -501,14 +515,15 @@ Created on each computer and not tracked: `venue.json`, `spaces.json`, `prefs.js
 
 ## Known limits
 
+- NDI is status only: the app shows that a Magewell converter is there, not what it is sending or showing. Other NDI sources, such as a presentation computer, are not shown at all.
 - It cannot tell whether a picture is actually present, only how things are routed. The exception is the input of a Teranex converter.
-- On the System map, a path that goes through both a converter and the switcher shows the converter but not the switcher. The heading above the map still names the true source.
 - Clean feeds are not traced back to a mix.
 - Downstream keys are listed as on air but not tied to a particular mix.
 - Until a PIN is set, anyone at the computer running the app can use Engineer view. There are no individual accounts, so the PIN is shared.
 - One floor plan only.
 - Plumbing stops at a switcher mix; it does not draw the inputs available to that mix.
-- The System map's device views show one device at a time; only the first two views trace across the router and switcher together.
+- The whole-map overview still has fixed columns, so it shows a room switcher only in its own view. The full chain appears once a screen or output is selected.
+- A feed from one room switcher into another is not followed.
 - It has not been observed reacting to a route change made on the hardware during a service.
 
 ## Licence
