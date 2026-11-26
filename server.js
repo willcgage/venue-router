@@ -56,7 +56,9 @@ function hub(ip, onChange) {
   }
   function connect() {
     if (closed) return;
-    const s = sock = net.connect({ host: ip, port: 9990 });
+    // An address may carry its own port, as in 127.0.0.1:19990. The tests use that to reach their pretend devices.
+    const at = String(ip).split(':');
+    const s = sock = net.connect({ host: at[0], port: +at[1] || 9990 });
     s.setKeepAlive(true, 10000);
     s.on('connect', () => { st.up = true; buf = ''; onChange(); });
     s.on('data', d => {
@@ -652,7 +654,7 @@ atem.on('error', () => {});
 atem.on('connected', () => { mixUp = true; mix = readMix(atem.state); changed(); });
 atem.on('disconnected', () => { mixUp = false; changed(); });
 atem.on('stateChanged', state => { mix = readMix(state); changed(); });
-atem.connect(core.switcher);
+atem.connect(String(core.switcher).split(':')[0]);
 
 // A room switcher that is an ATEM gets a second, ATEM-protocol connection for its streaming and recording state.
 // Like the main switcher's, it only listens to the state the switcher sends.
@@ -664,7 +666,7 @@ function ensureLive(r) {
   a.on('connected', () => update(a.state));
   a.on('stateChanged', s => update(s));
   a.on('disconnected', () => { if (r.live) { r.live = null; changed(); } });
-  a.connect(r.ip);
+  a.connect(String(r.ip).split(':')[0]);
 }
 
 // Changing the device list. Each change is saved to venue.json and takes effect at once.

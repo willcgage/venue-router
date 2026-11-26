@@ -691,8 +691,19 @@ function portDesc(n,l){
   var c=l.replace(/^RTR-(IN|OUT)-\d+[\s-]*/,'').replace(/^SW (Out|IN) \d+(\s*-\s*|$)/,'').replace(/^(Input|Output) \d+$/,'').replace(/\s*\((not working|future[^)]*)\)/ig,''),m=/^(\d+)\s*[:\-]\s*/.exec(c);
   if(m&&+m[1]===n+1)c=c.slice(m[0].length);
   return c.trim()}
-/* The standard name for a router port: its plate name, then what it is for. Only offered once a plate pattern is set. */
-function proposedLabel(dir,n,l,rec){var p=plateName(dir,n);if(!p)return '';var d=(rec&&rec.connected)||portDesc(n,l);return p+(d?' '+d:'')}
+/* The standard name for a router port is where its cable goes, then what it carries. Where it goes depends on the port:
+     tied to the switcher   the switcher port, then the switcher's own name for it: "SW IN 5 - Graphics"
+     to a recorder or converter   left as it is, because its label names the device port: "REC-IN-01"
+     anywhere else   the wall plate, then what it is for: "RTR-IN-14 Stage camera"
+   The switcher's name is the master for a tie, so renaming an input on the switcher changes what is proposed here.
+   Nothing is proposed for a direction until its plate pattern is set; that is what switches the standard on. */
+function tieName(word,n,name,plain,conn){var d=conn||(plain.test(name)?'':name);return word+' '+n+(d?' - '+d:'')}
+function proposedLabel(dir,n,l,rec){
+  var p=plateName(dir,n),conn=rec&&rec.connected;if(!p)return '';
+  if(dir==='out'&&n<TIE_IN)return tieName('SW IN',n+1,SW.inL[n+1]||'',/^Input \d+$/,conn);
+  if(dir==='in'&&n<TIE_OUT)return tieName('SW Out',n+1,SW.outL[n]||'',/^Output \d+$/,conn);
+  if(dir==='out'?(deckByFeed(n)||CONVS.some(function(c){return (c.feeds||[]).indexOf(n)>=0})):(deckByReturn(n)||convByReturn(n)))return l;
+  var d=conn||portDesc(n,l);return p+(d?' '+d:'')}
 function portRows(devKey,dir){
   var dev=portDevOf(devKey),isR=dev.key==='rtr',labels=dir==='in'?dev.inL:dev.outL,fed={},recs=portStore(dev.key)[dir]||{},rows=[],seen={};
   if(dir==='in')dev.route.forEach(function(i){fed[i]=(fed[i]||0)+1});
@@ -797,7 +808,7 @@ function renderPorts(){
       h+='<div class="field" style="margin-top:12px">'+(pi.changes.length?'<button type="button" class="btn primary" data-act="ports-import-save">Save '+(pi.changes.length===1?'this change':'these changes')+'</button>':'')+'<button type="button" class="btn" data-act="ports-import-drop">'+(pi.changes.length?'Discard':'Close')+'</button></div>'}
     h+='</section>'}
   h+='<section class="card panel"><h2>Wall plates and spreadsheets</h2>';
-  if(LIVE){h+='<p class="note" style="margin-bottom:10px">If the plates in your building are marked with the router port they are wired to, enter how they are written, with {n} where the port number goes. The standard name for a router port is then its plate name followed by what it is for, such as "RTR-IN-14 Stage camera", and every port is checked against that.</p>';
+  if(LIVE){h+='<p class="note" style="margin-bottom:10px">If the plates in your building are marked with the router port they are wired to, enter how they are written, with {n} where the port number goes. That switches on the naming standard: every router port is named for where its cable goes, then what it carries. A port on a wall plate becomes "RTR-IN-14 Stage camera". A port tied to the switcher takes the name the switcher gives it, as in "SW IN 5 - Graphics". Ports to recorders and converters are left as they are.</p>';
     h+='<div class="field devline"><label class="devk" for="pl-in">Plates wired to inputs</label><input type="text" id="pl-in" value="'+esc(PORTS.plates.in||'')+'" placeholder="RTR-IN-{n}" style="max-width:200px"></div>';
     h+='<div class="field devline"><label class="devk" for="pl-out">Plates wired from outputs</label><input type="text" id="pl-out" value="'+esc(PORTS.plates.out||'')+'" placeholder="RTR-OUT-{n}" style="max-width:200px"></div>'}
   h+='<div class="field devline"><span class="devk">Spreadsheet</span><button type="button" class="btn" data-act="ports-export">Export as CSV</button>'+(LIVE?'<label class="btn" for="ports-file" style="cursor:pointer">Import a CSV</label><input type="file" id="ports-file" accept=".csv,text/csv,text/plain" style="position:absolute;width:1px;height:1px;opacity:0">':'')+'<span class="note">Every device in one file. Opens in Excel or Google Sheets. Keep the Device, Direction and Port columns as they are.</span></div></section>';
@@ -812,7 +823,7 @@ function renderPorts(){
   var span=plates?10:9;
   rows.forEach(function(r){var open=LIVE&&portOpen&&portOpen.dev===r.dev&&portOpen.dir===r.dir&&portOpen.n===r.n;
     h+='<tr'+(open?' class="devsel"':'')+'><td class="num">'+r.no+'</td>'+(plates?'<td class="raw" style="font-size:12px">'+esc(r.plate)+'</td>':'')+'<td>'+esc(r.l)+'</td>';
-    h+='<td>'+(r.checks.length?(r.want?esc(r.target):'<span class="empty" title="Proposed from the plate name and what the port is for">'+esc(r.target)+'</span>')+r.checks.map(function(c){return ' <span class="chip warn">'+esc(c)+'</span>'}).join(''):r.target?'<span class="chip ok">Matches</span>':'')+'</td>';
+    h+='<td>'+(r.checks.length?(r.want?esc(r.target):'<span class="empty" title="Proposed from where the cable goes and what it carries">'+esc(r.target)+'</span>')+r.checks.map(function(c){return ' <span class="chip warn">'+esc(c)+'</span>'}).join(''):r.target?'<span class="chip ok">Matches</span>':'')+'</td>';
     h+='<td>'+esc(r.room)+'</td><td>'+(r.connected?esc(r.connected):r.auto?'<span class="empty" title="Known from ties and the Devices page">'+esc(r.auto)+'</span>':'')+'</td><td>'+(r.status?'<span class="chip'+(r.status==='fault'?' warn':'')+'">'+esc(statusText(r.status))+'</span>':'')+'</td><td class="raw" style="font-family:var(--sans);font-size:12px">'+esc(r.now)+'</td><td>'+esc(r.notes)+'</td>';
     h+='<td style="text-align:right">'+(LIVE?'<button type="button" class="btn" data-act="port-edit" data-dev="'+esc(r.dev)+'" data-dir="'+r.dir+'" data-n="'+r.n+'" aria-expanded="'+(open?'true':'false')+'">'+(open?'Close':'Edit')+'</button>':'')+'</td></tr>';
     if(open){var d=portDraft,f=function(k,label,ph,hint){return '<div class="field devline"><label class="devk" for="pt-'+k+'">'+label+'</label><input type="text" id="pt-'+k+'" data-pt="'+k+'" value="'+esc(d[k]||'')+'" placeholder="'+esc(ph)+'" maxlength="'+(k==='notes'?200:60)+'" style="max-width:'+(k==='notes'?420:260)+'px">'+(hint?'<span class="note">'+hint+'</span>':'')+'</div>'};
@@ -1506,5 +1517,7 @@ if(LIVE){connectES();window.fetch('auth').then(function(r){return r.json()}).the
 function fromHash(){var h=(location.hash||'').replace('#','');if(h.indexOf('room-')===0){view='room';roomId=h.slice(5)}else if(['overview','map','floor','path','patch','ports','devices','spaces'].indexOf(h)>=0)view=h==='path'?'map':h;render()}
 window.addEventListener('hashchange',fromHash);
 fromHash();
+/* For the tests in test/: hands the page's own functions to a caller that asked for them. Nothing in a browser sets VENUE_TEST. */
+if(window.VENUE_TEST)window.VENUE_TEST({trace:trace,describe:describe,roomTrace:roomTrace,chainBoxes:chainBoxes,stages:stages,findings:findings,suggest:suggest,devRows:devRows,mapModel:mapModel,sysModel:sysModel,portRows:portRows,portDesc:portDesc,proposedLabel:proposedLabel,renameCount:renameCount,renameList:renameList,knownEnd:knownEnd,parseCsv:parseCsv,portsCsv:portsCsv,readPortsCsv:readPortsCsv,csvCell:csvCell,sortRows:sortRows,ranges:ranges,natCmp:natCmp,plainIn:plainIn,plainOut:plainOut,inName:inName,outName:outName,clean:clean,plateName:plateName,setSort:function(t,v){SORTS[t]=v}});
 })();
 </script>

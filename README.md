@@ -418,12 +418,23 @@ If the plates in the building are marked with the router port they are wired to,
 
 A port whose label is only its plate name, such as `RTR-IN-66`, is a plate and not an unnamed port. Once "Connected" is filled in for it, that name is shown across the app in place of the plate name, "Named only" stops hiding it, and Full patch stops listing it under Worth a look.
 
-Every router port also gets a standard name: **its plate name, then what it is for**, as in `RTR-IN-14 Stage camera`. The second part comes from "Connected" if you filled it in, and otherwise from the current label with the port number and any status note taken off:
+Setting a plate pattern also switches on the naming standard for that direction. Every router port is named for **where its cable goes, then what it carries**. Where it goes depends on the port:
+
+| The port's cable goes to | Standard name | Example |
+|---|---|---|
+| A wall plate | The plate name, then what it is for | `RTR-IN-14 Stage camera` |
+| The switcher | The switcher port, then the switcher's own name for it | `SW IN 5 - Graphics`, `SW Out 2 - Program` |
+| A recorder or converter | Left as it is, because its label names the device port | `REC-IN-01`, `TRNX-OUT-1A` |
+
+The app knows which is which from the ties in `venue.json` and the cabling on the Devices page.
+
+For a port tied to the switcher, **the switcher's name is the master**. Rename an input on the switcher and the router port that feeds it is marked "Rename" with the new name ready. A switcher port still called "Input 12" or "Output 3" adds nothing, so its router port is just `SW IN 12`.
+
+For a port on a wall plate, the second part comes from "Connected" if you filled it in, and otherwise from the current label with the port number and any status note taken off:
 
 | Hardware label | Standard name |
 |---|---|
 | `22: Podium` | `RTR-IN-22 Podium` |
-| `SW IN 5 - Graphics` | `RTR-OUT-5 Graphics` |
 | `Playback 2 (Not Working)` | `RTR-IN-31 Playback 2` (record "Not working" under Status) |
 | `Input 040` | `RTR-IN-40` |
 | `RTR-IN-14 Stage camera` | unchanged, it already matches |
@@ -597,10 +608,24 @@ The addresses can be left off when `venue.json` already holds them. Opened this 
 
 `venue-snapshot.html` contains your device labels and spaces. It is not tracked by git, and `venue-router.html` itself never holds any venue data: the server puts the current state into the page at the moment it serves it.
 
+## Tests
+
+```
+npm test
+```
+
+The tests need no hardware and take a few seconds. They run on every pull request, on Windows, Mac and Linux.
+
+- **The server** is started for real against pretend devices on the same computer (`test/pretend-hub.js` speaks the Videohub protocol). The tests check what it reads, what it saves, who is refused, and exactly what it sends when an engineer renames ports: label blocks only, to the router only, never a route.
+- **The page's logic** is loaded outside a browser on a small made-up venue (`test/fixture.js`): following a picture back to its source, the naming standard, cabling read from labels, the whole-system view, sorting, and the spreadsheet round trip.
+
+A device address in `venue.json` may carry a port, as in `127.0.0.1:19990`. That exists so the tests can reach their pretend devices; real devices use the standard port and need none.
+
 ## Files
 
 | File | Purpose |
 |---|---|
+| `test/` | The tests, a pretend Videohub and a made-up venue. Not part of an installed copy |
 | `server.js` | Watches the devices and serves the live page |
 | `venue-router.html` | The whole interface, in one file |
 | `capture.js` | Writes an offline copy of the app with a snapshot inside it |
