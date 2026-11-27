@@ -37,6 +37,11 @@ test('the port register is saved, cleaned, and kept from people without the PIN'
   assert.deepEqual(saved.rooms, {}, 'a device that is not set up is ignored');
   assert.equal(saved.rtr.in[5].connected, 'Handheld camera', 'ports that were not sent are left alone');
 
+  // A plate's own marking is kept with its port, and only when there is one
+  await app.post('/ports', { set: [{ dev: 'rtr', dir: 'out', port: 6, plate: '  TV-LOBBY ' }, { dev: 'rtr', dir: 'out', port: 7, plate: '' }] });
+  assert.deepEqual(app.file('ports.json').rtr.out[6], { room: '', connected: '', status: '', notes: '', want: '', plate: 'TV-LOBBY' });
+  assert.equal(app.file('ports.json').rtr.out[7], undefined);
+
   // Which ports have wall plates is saved beside the plate patterns, and only as port numbers
   r = await app.post('/ports', { plates: { inOn: '3-5, 9' } });
   assert.equal(r.status, 204);

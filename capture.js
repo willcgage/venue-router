@@ -11,7 +11,9 @@ const { args, file: dataFile } = require('./data-dir');
 function read(ip) {
   return new Promise((resolve, reject) => {
     let text = '';
-    const sock = net.connect({ host: ip, port: 9990 });
+    // An address may carry its own port, as it can in venue.json
+    const at = /^(.*):(\d+)$/.exec(ip);
+    const sock = net.connect({ host: at ? at[1] : ip, port: at ? +at[2] : 9990 });
     const done = () => { sock.destroy(); resolve(text); };
     sock.setTimeout(8000, () => (text ? done() : (sock.destroy(), reject(new Error('Timed out reading ' + ip)))));
     sock.on('data', d => { text += d.toString('utf8'); if (text.includes('END PRELUDE:')) done(); });
@@ -60,6 +62,15 @@ function parse(text) {
       console.log(`${r.place}: ${p.model}`);
     }
   } catch (e) { console.log('Rooms not read: ' + e.message); }
+  // Recorders, converters, monitors and NDI converters: where they are and which router ports they are on, from
+  // venue.json. They are not asked for anything here, so a snapshot has no status for them, and no addresses.
+  try {
+    const cfg = JSON.parse(fs.readFileSync(dataFile('venue.json'), 'utf8'));
+    snap.decks = (cfg.decks || []).map(d => ({ id: d.id, place: d.place, feed: d.feed, returns: d.returns || [] }));
+    snap.convs = (cfg.convs || []).map(c => ({ id: c.id, place: c.place, feeds: c.feeds || [], returns: c.returns || [] }));
+    snap.mons = (cfg.mons || []).map(m => ({ id: m.id, place: m.place, feeds: m.feeds || [] }));
+    snap.ndis = (cfg.ndis || []).map(n => ({ id: n.id, place: n.place, name: n.name || '' }));
+  } catch (e) {}
   // Floor plan pin positions, if any have been saved. The plan image itself is not embedded.
   try { snap.floor = { pins: JSON.parse(fs.readFileSync(dataFile('floor.json'), 'utf8')).pins || {}, hasImage: false, v: 0 }; } catch (e) {}
   // Spaces set up by an engineer, if any have been saved.

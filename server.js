@@ -519,7 +519,10 @@ function cleanPorts(raw) {
       const n = +k, p = src[k] || {};
       if (!(Number.isInteger(n) && n >= 0 && n < 1000)) continue;
       const e = { room: text(p.room, 60), connected: text(p.connected, 60), status: PORT_STATUS.includes(p.status) ? p.status : '', notes: text(p.notes, 200), want: text(p.want, 60) };
-      if (e.room || e.connected || e.status || e.notes || e.want) out[n] = e;
+      // plate is what is printed on this port's wall plate, kept only when it differs from the usual marking
+      const mark = text(p.plate, 40);
+      if (mark) e.plate = mark;
+      if (e.room || e.connected || e.status || e.notes || e.want || e.plate) out[n] = e;
     }
     return out;
   };

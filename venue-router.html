@@ -22,6 +22,18 @@
   --ok:#4fd292; --ok-soft:#0f2c20; --warn:#f7b84b; --warn-soft:#37290d; --bad:#fb7c72; --bad-soft:#3a1613; --sw:#bca6f7; --sw-soft:#261d45;
   --side:#080c14; --side-ink:#eef2f8; --side-muted:#8b98ad; --side-active:#172238; color-scheme:dark }
 *{box-sizing:border-box}
+@media print{
+  :root,:root[data-theme="dark"],:root:not([data-theme="light"]){--bg:#fff;--surface:#fff;--surface-2:#fff;--ink:#000;--ink-2:#222;--ink-3:#444;--line:#999;--line-2:#777;--brand:#000;--brand-soft:#fff;color-scheme:light}
+  .side,.top,.actionbar,.noprint{display:none!important}
+  body,main{background:#fff!important}
+  main{padding:0!important;max-width:none!important}
+  .card{border:0!important;box-shadow:none!important}
+  table{min-width:0!important}
+  tr{break-inside:avoid}
+}
+.lblgrid{display:flex;flex-wrap:wrap;gap:2mm;margin-bottom:6mm}
+.lbl{box-sizing:border-box;border:1px dashed #888;background:#fff!important;color:#000!important;display:flex;align-items:center;justify-content:center;font-weight:700;white-space:nowrap;overflow:hidden;break-inside:avoid;line-height:1}
+.tickbox{display:inline-block;width:14px;height:14px;border:1.5px solid var(--ink-2);border-radius:3px;vertical-align:middle}
 [hidden]{display:none!important}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
@@ -142,6 +154,17 @@ tr.devedit>td{background:var(--surface-2);padding:14px 16px}
 .jack.bad{border-color:var(--warn);background:var(--warn-soft)}
 .jack.diff{border-color:var(--warn);border-style:solid;box-shadow:inset 0 0 0 1.5px var(--warn)}
 .jack.sel{outline:2px solid var(--brand);outline-offset:2px}
+.infowrap{position:relative;display:inline-flex;vertical-align:middle;margin-left:8px}
+.infowrap::after{content:"";position:absolute;top:100%;left:-6px;right:-6px;height:10px}
+.infobtn{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line-2);background:var(--surface);color:var(--ink-2);font:italic 600 14px/1 Georgia,"Times New Roman",serif;padding:0;cursor:pointer}
+.infobtn:hover,.infobtn:focus-visible,.infobtn[aria-expanded="true"]{border-color:var(--brand);color:var(--brand)}
+.infopop{display:none;position:absolute;top:calc(100% + 8px);left:-6px;z-index:40;width:min(400px,78vw);padding:12px 14px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font:400 13px/1.55 var(--sans);text-align:left;white-space:normal;box-shadow:0 10px 28px rgba(0,0,0,.28)}
+.infopop .ip{display:block;margin:0 0 8px}.infopop .ip:last-child{margin:0}
+.infowrap:hover .infopop,.infowrap:focus-within .infopop,.infopop.open{display:block}
+.infowrap.end .infopop{left:auto;right:-6px}
+/* On a narrow screen there is no room beside the button, so the text sits along the bottom of the screen instead */
+@media (max-width:640px){.infopop{position:fixed;left:12px;right:12px;top:auto;bottom:12px;width:auto;max-height:60vh;overflow:auto}.infowrap.end .infopop{left:12px;right:12px}}
+@media print{.infowrap{display:none}}
 td.num{font-family:var(--mono);color:var(--ink-3);width:52px}
 .finds{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 .plan{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface-2)}
@@ -342,6 +365,12 @@ function saveSpaces(quiet){
 var BASE={RR:RT.route.slice(),SR:SW.route.slice()},S={RR:RT.route.slice(),SR:SW.route.slice()};
 
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+/* An "i" button that holds an explanation. Hovering or tabbing to it shows the text, and selecting it keeps the text
+   open, which is what a touch screen needs. paras is a list of sentences or short paragraphs, already safe to show. */
+var infoOpen=null;
+function info(id,label,paras,end){var open=infoOpen===id;
+  return '<span class="infowrap'+(end?' end':'')+'"><button type="button" class="infobtn" data-info="'+id+'" aria-expanded="'+(open?'true':'false')+'" aria-label="'+esc(label)+'">i</button><span class="infopop'+(open?' open':'')+'" role="note">'+[].concat(paras).map(function(p){return '<span class="ip">'+p+'</span>'}).join('')+'</span></span>'}
+function infoClose(){if(!infoOpen)return;infoOpen=null;document.querySelectorAll('.infopop.open').forEach(function(x){x.classList.remove('open')});document.querySelectorAll('.infobtn[aria-expanded="true"]').forEach(function(x){x.setAttribute('aria-expanded','false')})}
 function grp(id){return GROUPS.filter(function(g){return g.id===id})[0]}
 function groupOf(d){return GROUPS.filter(function(g){return g.dests.indexOf(d)>=0})[0]}
 function clean(l){return l.replace(/^\d+:\s*/,'').replace(/^RTR-(IN|OUT)-\d+\s+/,'').replace(/^SW (Out|IN) \d+ - /,'')}
@@ -682,7 +711,7 @@ function renderPanels(){
   var h='';
   if(panelErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(panelErr)+'</p>';
   if(!PANELS.length)h+='<section class="card panel"><h2>No patch panels recorded yet</h2><p class="note">A patch panel is the row of jacks in a rack where the cables from wall plates meet the router. Nothing in the system can see how it is patched, so it is recorded here. Once it is, the app shows where each router port really goes, and which jacks are open.</p></section>';
-  else h+='<div class="field"><label class="check"><input type="checkbox" id="panel-open-only"'+(panelOpenOnly?' checked':'')+'>Only open jacks</label><span class="note">Select a jack to record what it is and what it is patched to.</span></div>';
+  else h+='<div class="field"><label class="check"><input type="checkbox" id="panel-open-only"'+(panelOpenOnly?' checked':'')+'>Only open jacks</label><span class="note">Select a jack to record it.</span>'+info('panels','About patch panels',['Each square is a jack. Solid means patched to a router port, dashed means open, and an amber edge means it is not patched as normal.','For each jack, record the label printed on it, where its fixed cable goes, and the router port it is patched to.','When the panel shows how it is meant to be patched, choose Save as normal. After that, any jack patched differently is marked.','This is a record kept by people. If a cable is moved in the rack, move it here too, or the app will show the old patch.'])+'</div>';
   PANELS.forEach(function(p){var st=panelStats(p),setting=LIVE&&panelSet&&panelSet.id===p.id;
     h+='<section class="card panel"><div class="field"><h2 style="margin:0">'+esc(p.name)+'</h2>'+(p.place?'<span class="note">'+esc(p.place)+'</span>':'')+'<span class="chip">'+p.jacks.length+(p.jacks.length===1?' jack':' jacks')+'</span>'+(st.open?'<span class="chip">'+st.open+' open</span>':'<span class="chip">None open</span>')+(st.clash?'<span class="chip warn">'+st.clash+' to check</span>':'')+(Array.isArray(p.normal)?(st.diff?'<span class="chip warn">'+st.diff+' not as normal</span>':'<span class="chip ok">Patched as normal</span>'):'')+'<span style="flex:1"></span>'+(LIVE?'<button type="button" class="btn" data-act="panel-settings" data-p="'+esc(p.id)+'" aria-expanded="'+(setting?'true':'false')+'">'+(setting?'Close':'Panel settings')+'</button>':'')+'</div>';
     if(setting){var s=panelSet;
@@ -705,7 +734,7 @@ function renderPanels(){
       h+='<tr'+(open?' class="devsel"':'')+'><td class="num">'+(k+1)+'</td><td>'+esc(j.label)+'</td><td>'+esc(j.to)+'</td><td>'+(j.patch?esc(portText(j.patch))+(clash.length?' <span class="chip warn">Also on '+esc(clash.join(', '))+'</span>':''):'<span class="chip">Open</span>')+dn+'</td><td style="text-align:right">'+(LIVE?'<button type="button" class="btn" data-act="jack-edit" data-p="'+esc(p.id)+'" data-j="'+k+'" aria-expanded="'+(open?'true':'false')+'">'+(open?'Close':'Edit')+'</button>':'')+'</td></tr>';
       if(open){var d=panelEdit.draft,used={};PANELS.forEach(function(q){q.jacks.forEach(function(x,n){if(x.patch&&!(q===p&&n===k))used[x.patch.dir+':'+x.patch.port]=(q!==p?q.name+' ':'')+'jack '+(n+1)})});
         var opts=function(dir,labels){return labels.map(function(l,n){var v=dir+':'+n;return '<option value="'+v+'"'+(d.patch===v?' selected':'')+'>'+(n+1)+' · '+esc(l)+(used[v]?' (on '+esc(used[v])+')':'')+'</option>'}).join('')};
-        h+='<tr class="devedit"><td colspan="5"><div class="field devline"><label class="devk" for="pj-label">Label on the jack</label><input type="text" id="pj-label" data-pj="label" value="'+esc(d.label)+'" maxlength="40" placeholder="MV01" style="max-width:200px"><span class="note">What is printed on the panel.</span></div>';
+        h+='<tr class="devedit"><td colspan="5"><div class="field devline"><label class="devk" for="pj-label">Label on the jack</label><input type="text" id="pj-label" data-pj="label" value="'+esc(d.label)+'" maxlength="40" placeholder="MON1" style="max-width:200px"><span class="note">What is printed on the panel.</span></div>';
         h+='<div class="field devline"><label class="devk" for="pj-to">Goes to</label><input type="text" id="pj-to" data-pj="to" value="'+esc(d.to)+'" maxlength="80" placeholder="Wall plate behind the lobby TV" style="max-width:340px"><span class="note">Where its fixed cable ends.</span></div>';
         h+='<div class="field devline"><label class="devk" for="pj-patch">Patched to</label><select id="pj-patch" data-pj="patch"><option value="">Open, nothing plugged in</option><optgroup label="Router outputs">'+opts('out',RT.outL)+'</optgroup><optgroup label="Router inputs">'+opts('in',RT.inL)+'</optgroup></select></div>';
         h+='<div class="field devline"><span class="devk"></span><button type="button" class="btn primary" data-act="jack-save">Save</button><button type="button" class="btn" data-act="jack-cancel">Cancel</button></div></td></tr>'}});
@@ -735,7 +764,7 @@ var PLATE_MEMO={};
 function platePorts(dir){var labels=dir==='in'?RT.inL:RT.outL,m=PLATE_MEMO[dir];
   if(!m||m.labels!==labels||m.on!==PORTS.plates[dir+'On']||m.pat!==PORTS.plates[dir])m=PLATE_MEMO[dir]={labels:labels,on:PORTS.plates[dir+'On'],pat:PORTS.plates[dir],set:!PORTS.plates[dir]?{}:platesSaved(dir)?parsePorts(PORTS.plates[dir+'On'],labels.length):detectPlates(dir)};
   return m.set}
-function plateName(dir,n){return platePorts(dir)[n]&&!rackEnd(dir,n)?plateRaw(dir,n):''}
+function plateName(dir,n){if(!platePorts(dir)[n]||rackEnd(dir,n))return '';var r=PORTS.rtr[dir][n];return (r&&r.plate)||plateRaw(dir,n)}
 function statusText(s){var x=PORT_STATUS.filter(function(o){return o[0]===s})[0];return s&&x?x[1]:''}
 /* A switcher lists its real inputs first, then the pictures it makes itself, starting at Color Bars. Only the real ones are ports. */
 function lastRealInput(inL){var cb=inL.indexOf('Color Bars');return cb>1?cb-1:inL.length-1}
@@ -788,7 +817,10 @@ function proposedLabel(dir,n,l,rec){
   if(dir==='out'&&n<TIE_IN)return tieName('SW IN',n+1,SW.inL[n+1]||'',/^Input \d+$/,conn);
   if(dir==='in'&&n<TIE_OUT)return tieName('SW Out',n+1,SW.outL[n]||'',/^Output \d+$/,conn);
   if(rackEnd(dir,n))return l;
-  var p=plateName(dir,n),d=conn||portDesc(n,l);return p?p+(d?' '+d:''):d}
+  var p=plateName(dir,n),d=conn||portDesc(n,l);if(!p)return d;
+  /* A plate with its own marking often is the description: "MON1" on the wall, "MON 1" on the router. Say it once. */
+  var np=normName(p).replace(/ /g,''),nd=normName(d).replace(/ /g,'');
+  return !d||nd===np?p:nd.indexOf(np)===0?d:p+' '+d}
 function portRows(devKey,dir){
   var dev=portDevOf(devKey),isR=dev.key==='rtr',labels=dir==='in'?dev.inL:dev.outL,fed={},recs=portStore(dev.key)[dir]||{},rows=[],seen={};
   if(dir==='in')dev.route.forEach(function(i){fed[i]=(fed[i]||0)+1});
@@ -832,7 +864,8 @@ function readPortsCsv(text,fileName){
   var cDev=col('Device'),cDir=col('Direction'),cPort=col('Port'),cHw=col('Hardware label');
   if(cDir<0||cPort<0)return {error:'That file has no Direction and Port columns, so its rows cannot be matched to ports. Start from an exported list and keep those two columns.'};
   var fields=PORT_FIELDS.map(function(f){var c=col(f[1]);if(c<0&&f[0]==='room')c=col('Plate is in');return {k:f[0],name:f[1],c:c}}).filter(function(f){return f.c>=0});
-  if(!fields.length)return {error:'That file has none of the columns that can be imported: '+PORT_FIELDS.map(function(f){return f[1]}).join(', ')+'.'};
+  if(!fields.length&&col('Plate')<0)return {error:'That file has none of the columns that can be imported: '+PORT_FIELDS.map(function(f){return f[1]}).join(', ')+', Plate.'};
+  var cPlate=col('Plate'),noPlate=0;
   var seen={},skipped=0,dated=0,relabel=0,badStatus=0;
   rows.slice(1).forEach(function(r){
     var dn=cDev>=0?(r[cDev]||'').trim().toLowerCase():'router',dev=devs.filter(function(x){return x.name.toLowerCase()===dn||x.key.toLowerCase()===dn})[0];
@@ -840,14 +873,19 @@ function readPortsCsv(text,fileName){
     if(dev&&d&&!isNaN(p)){if(d==='out')n=p>=1&&p<=dev.outL.length?p-1:-1;else{for(var i=dev.first;i<=dev.last;i++)if(dev.inNo(i)===p){n=i;break}}}
     if(n<0||seen[dev.key+d+n]){skipped++;return}
     seen[dev.key+d+n]=1;
-    var labels=d==='in'?dev.inL:dev.outL,cur=portStore(dev.key)[d][n]||{},rec={room:cur.room||'',connected:cur.connected||'',status:cur.status||'',notes:cur.notes||'',want:cur.want||''},diffs=[];
+    var labels=d==='in'?dev.inL:dev.outL,cur=portStore(dev.key)[d][n]||{},rec={room:cur.room||'',connected:cur.connected||'',status:cur.status||'',notes:cur.notes||'',want:cur.want||'',plate:cur.plate||''},diffs=[];
     if(cHw>=0&&(r[cHw]||'').trim()!==labels[n].trim())relabel++;
     fields.forEach(function(f){var v=(r[f.c]||'').trim();
       if(/^\d{1,2}[-\/ ](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(v)||/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v))dated++;
       if(f.k==='status'){var s=v.toLowerCase(),hit=PORT_STATUS.filter(function(o){return o[0]===s||o[1].toLowerCase()===s})[0];
         if(!hit&&s==='')hit=PORT_STATUS[0];if(!hit){badStatus++;return}v=hit[0]}
       if(v!==rec[f.k]){diffs.push({name:f.name,from:f.k==='status'?statusText(rec[f.k]):rec[f.k],to:f.k==='status'?statusText(v):v});rec[f.k]=v}});
+    /* Plate: what is printed on the plate. An empty cell leaves it alone; the usual marking clears an own one. */
+    if(cPlate>=0){var pv=(r[cPlate]||'').trim();
+      if(pv){if(dev.key!=='rtr'||!plateName(d,n))noPlate++;
+        else{var usual=plateRaw(d,n),own=pv===usual?'':pv.slice(0,40);if(own!==rec.plate){diffs.push({name:'Plate',from:rec.plate||usual,to:own||usual});rec.plate=own}}}}
     if(diffs.length)changes.push({dev:dev.key,label:dev.name+' '+(d==='in'?'input ':'output ')+p,dir:d,port:n,rec:rec,diffs:diffs})});
+  if(noPlate)warn.push(noPlate+(noPlate===1?' row has':' rows have')+' something under "Plate" for a port that has no wall plate. That was left out. To give a port a plate, edit it on the page.');
   if(skipped)warn.push(skipped+(skipped===1?' row was':' rows were')+' skipped: the Device, Direction or Port did not match a port here, or the port appeared twice.');
   if(relabel)warn.push(relabel+(relabel===1?' row has':' rows have')+' a changed "Hardware label". That column is what the device says now and is not imported. Put the name you want in "New label".');
   if(dated)warn.push(dated+(dated===1?' value looks':' values look')+' like a date. A spreadsheet may have changed a name such as "1-2" into one. Check those rows before saving.');
@@ -869,12 +907,17 @@ function renameSend(changes,undo,dev){var w=renameWords(dev);
     renameBusy=false;renameOpen=false;renameSkip={};renameFail=j.failed&&j.failed.length?j.failed:null;
     say(j.done+' '+(j.done===1?w.one:w.many)+' renamed on '+w.the+'.'+(renameFail?' '+renameFail.length+' could not be renamed.':''),renameFail?'bad':'info');render()}).catch(function(e){
     renameBusy=false;portErr=e&&e.message?e.message:'Nothing was changed on '+w.the+'. Try again.';render()})}
+/* The card is left off the page until it has something to say: names to send, a rename to undo, something that
+   failed, or, for the router, a naming check that is switched on. A new install is not shown an empty card. */
+function renameShown(dev){
+  if(renameFail||renameList(dev).length||RENAMES.some(function(e){return (e.dev||'rtr')===dev}))return true;
+  return dev==='rtr'&&!!(PORTS.plates.in||PORTS.plates.out)}
 function renameHtml(dev){
-  var isS=dev==='sw',w=renameWords(dev),h='<section class="card panel"><h2>'+w.title+'</h2>',list=renameList(dev),picked=list.filter(function(r){return !renameSkip[r.dir+r.n]}),recent=RENAMES.filter(function(e){return (e.dev||'rtr')===dev});
+  var isS=dev==='sw',w=renameWords(dev),h='<section class="card panel"><h2>'+w.title+info('rename-'+dev,'About renaming on '+w.the,isS?['Only an input\'s name is sent. The short name on the panel buttons, what each mix is on, and every other setting are left alone.','To rename an input, choose Edit on its row under Inputs, enter a New label of up to 20 characters, and save. It then appears here to send.','Nothing is sent until you review the list and confirm. Control panels and multiviewers show new names straight away, and each rename can be undone here.']:['Only labels are sent. No route, lock or other setting is touched.','The list is every router port whose label differs from the name under "Should be".','Nothing is sent until you review the list and confirm. Control panels and multiviewers show new names straight away, and each rename can be undone here.'])+'</h2>',list=renameList(dev),picked=list.filter(function(r){return !renameSkip[r.dir+r.n]}),recent=RENAMES.filter(function(e){return (e.dev||'rtr')===dev});
   if(!auth.pinSet){return h+'<p class="note">Renaming is switched off until an Engineer PIN is set. With a PIN, only someone who has entered it can change names on '+w.the+'.</p></section>'}
   if(renameFail){h+='<p class="note" style="color:var(--bad);margin-bottom:6px">These were not renamed:</p><ul class="finds">'+renameFail.map(function(f){return '<li>'+(f.dir==='in'?'Input ':'Output ')+(isS?f.port:f.port+1)+' to "'+esc(f.to)+'". '+esc(f.why||'')+'</li>'}).join('')+'</ul>'}
-  if(!list.length)h+='<p class="note">'+(isS?'No switcher input is waiting to be renamed. To rename one, choose Edit on its row under Inputs, enter a New label of up to 20 characters, and save. It then appears here to send.':(PORTS.plates.in||PORTS.plates.out?'Every router label already matches the name it should carry. There is nothing to rename.':'There is nothing to rename yet. Names are proposed once the naming check is switched on under Wall plates.'))+'</p>';
-  else if(!renameOpen)h+='<p class="note" style="margin-bottom:10px">'+(isS?list.length+(list.length===1?' switcher input has a New label that differs from its name on the switcher.':' switcher inputs have a New label that differs from their names on the switcher.')+' You can send the new names to the switcher from here. Only the name changes: the short name on the panel buttons, what each mix is on, and every other setting are left alone.':list.length+(list.length===1?' router port has':' router ports have')+' a label that differs from the name under "Should be". You can send the new names to the router from here. Only labels change: no route, lock or other setting is touched.')+'</p><div class="field"><button type="button" class="btn primary" data-act="rename-open">Review '+list.length+(list.length===1?' rename':' renames')+'</button></div>';
+  if(!list.length)h+='<p class="note">'+(isS?'No switcher input is waiting to be renamed.':(PORTS.plates.in||PORTS.plates.out?'Every router label already matches. There is nothing to rename.':'Nothing to rename yet. Names are proposed once the naming check is switched on under Wall plates.'))+'</p>';
+  else if(!renameOpen)h+='<p class="note" style="margin-bottom:10px">'+(isS?list.length+(list.length===1?' switcher input has a New label to send.':' switcher inputs have a New label to send.'):list.length+(list.length===1?' router port has':' router ports have')+' a label that differs from "Should be".')+'</p><div class="field"><button type="button" class="btn primary" data-act="rename-open">Review '+list.length+(list.length===1?' rename':' renames')+'</button></div>';
   else{h+='<p class="note" style="margin-bottom:8px">Untick anything you want left as it is. Nothing is sent until you choose Rename and confirm. Control panels and multiviewers show new names straight away.</p>';
     h+='<div class="scroll" style="max-height:380px;overflow:auto"><table><thead><tr><th style="width:44px"></th><th>Port</th><th>Label now</th><th>Will become</th></tr></thead><tbody>';
     list.forEach(function(r){var k=r.dir+r.n;h+='<tr><td><input type="checkbox" data-rn="'+k+'"'+(renameSkip[k]?'':' checked')+' aria-label="Rename '+(r.dir==='in'?'input ':'output ')+r.no+'"></td><td>'+(r.dir==='in'?'Input ':'Output ')+r.no+'</td><td>'+esc(r.l)+'</td><td>'+esc(r.target)+r.checks.filter(function(c){return c!=='Rename'}).map(function(c){return ' <span class="chip warn">'+esc(c)+'</span>'}).join('')+'</td></tr>'});
@@ -886,19 +929,57 @@ function renameHtml(dev){
 /* Wall plates: closed, it says in a line or two what is set. Open, it is four boxes and a Save. */
 var plateOpen=false,plateDraft=null;
 function platesHtml(){
-  var on={in:!!PORTS.plates.in,out:!!PORTS.plates.out},h='<section class="card panel"><h2>Wall plates</h2>';
+  var on={in:!!PORTS.plates.in,out:!!PORTS.plates.out},h='<section class="card panel"><h2>Wall plates'+info('plates','About wall plates and naming',['Some router ports end at a plate on a wall. The rest go to equipment in the rack.','Saying how the plates are marked switches on the naming check. Every router port is then named for where its cable goes and what it carries: a plate port starts with its plate name, a port tied to the switcher takes the switcher\'s name, and rack equipment keeps a plain name.','The app works out which ports have a plate from their labels. Change that only if a port is missing or should not be there.'])+'</h2>';
   if(plateOpen&&plateDraft){var d=plateDraft,box=function(k,label,ph,w,hint){return '<div class="field devline"><label class="devk" for="pd-'+k+'">'+label+'</label><input type="text" id="pd-'+k+'" data-pd="'+k+'" value="'+esc(d[k]||'')+'" placeholder="'+ph+'" style="max-width:'+w+'px">'+(hint?'<span class="note">'+hint+'</span>':'')+'</div>'};
-    h+='<p class="note" style="margin-bottom:10px">Some router ports end at a plate on a wall. Say how the plates are marked and which ports have one. Everything else, such as equipment in the rack, is named without a plate.</p>';
+    h+='';
     h+=box('in','Input plates are marked','RTR-IN-{n}',200,'{n} is the port number.')+box('inOn','Inputs with a plate','66-96, 113-120',320,'Port numbers and ranges. Leave empty and the app works it out from the labels.');
     h+=box('out','Output plates are marked','RTR-OUT-{n}',200,'')+box('outOn','Outputs with a plate','71-96, 113-120',320,'');
     return h+'<div class="field devline"><span class="devk"></span><button type="button" class="btn primary" data-act="plates-save">Save</button><button type="button" class="btn" data-act="plates-cancel">Cancel</button></div></section>'}
-  if(!on.in&&!on.out)return h+'<p class="note" style="margin-bottom:10px">The naming check is off. To switch it on, say how the wall plates in your building are marked. The app then proposes a standard name for every router port and shows which ones differ.</p>'+(LIVE?'<div class="field"><button type="button" class="btn primary" data-act="plates-open">Set up wall plates</button></div>':'')+'</section>';
+  if(!on.in&&!on.out)return h+'<p class="note" style="margin-bottom:10px">The naming check is off. Set up wall plates to switch it on.</p>'+(LIVE?'<div class="field"><button type="button" class="btn primary" data-act="plates-open">Set up wall plates</button></div>':'')+'</section>';
   var line=function(dir,word){if(!on[dir])return '<li>'+word+': not set up, so '+word.toLowerCase()+' are not checked.</li>';var set=platePorts(dir),n=Object.keys(set).length;
     return '<li>'+word+': '+(n?n+(n===1?' port has':' ports have')+' a plate ('+esc(portsText(set))+'), marked '+esc(PORTS.plates[dir])+'.':'no port has a plate.')+(platesSaved(dir)?'':' <span class="chip">Worked out from the labels</span>')+'</li>'};
   h+='<ul class="finds">'+line('in','Inputs')+line('out','Outputs')+'</ul>';
-  if(LIVE)h+='<div class="field" style="margin-top:10px"><button type="button" class="btn" data-act="plates-open">Change</button>'+((on.in&&!platesSaved('in'))||(on.out&&!platesSaved('out'))?'<span class="note">If those are right there is nothing to do. Change them if a port is missing or should not be there.</span>':'')+'</div>';
+  h+='<div class="field" style="margin-top:10px">'+(LIVE?'<button type="button" class="btn" data-act="plates-open">Change</button>':'')+'<button type="button" class="btn" data-act="plates-sheet">Make plate labels</button></div>';
+  if(LIVE)h+='<div class="field" style="margin-top:6px">'+((on.in&&!platesSaved('in'))||(on.out&&!platesSaved('out'))?'<span class="note">If those are right there is nothing to do. Change them if a port is missing or should not be there.</span>':'')+'</div>';
   return h+'</section>'}
+/* Plate labels: everything that needs a label on a wall or a panel, as a list to print and take to the label maker.
+   Wall plates come from the router's plate ports, and jacks from the patch panels. */
+var plateSheet=false,plateSheetOwn=false,plateSheetMode='list',plateSheetSize='38x13';
+/* Sizes are the printed size in millimetres. A browser prints millimetres true when the print scale is 100%. */
+var LABEL_SIZES=[['25x9','Small, 25 x 9 mm (1 x 3/8 in)',25,9],['38x13','Medium, 38 x 13 mm (1 1/2 x 1/2 in)',38,13],['50x19','Large, 50 x 19 mm (2 x 3/4 in)',50,19]];
+/* The text is made as large as fits the label: limited by its height, and by its width for a long marking. */
+function labelFont(text,w,h){return Math.max(1.6,Math.min(h*0.62,(w-4)/(Math.max(1,String(text).length)*0.62)))}
+/* One row per label, for label-maker software, which reads a spreadsheet file and prints a label per row. */
+function labelsCsv(own){
+  var s=plateSheetRows(),lines=[['Label','Kind','Where','For','Wired to']];
+  s.plates.forEach(function(r){if(!own||r.own)lines.push([r.mark,'Wall plate',r.where,r.what,r.port])});
+  s.jacks.forEach(function(r){if(r.label)lines.push([r.label,'Patch panel jack',r.panel+', jack '+r.jack,r.to,r.patch])});
+  return '\ufeff'+lines.map(function(l){return l.map(csvCell).join(',')}).join('\r\n')+'\r\n'}
+function saveFile(text,name){var blob=new Blob([text],{type:'text/csv;charset=utf-8'}),lnk=document.createElement('a');lnk.href=URL.createObjectURL(blob);lnk.download=name;document.body.appendChild(lnk);lnk.click();lnk.remove();setTimeout(function(){URL.revokeObjectURL(lnk.href)},1000)}
+function plateSheetRows(){
+  var plates=[],jacks=[];
+  ['in','out'].forEach(function(dir){portRows('rtr',dir).forEach(function(r){if(r.plate)plates.push({mark:r.plate,where:r.room,what:r.connected||portDesc(r.n,r.l),port:(dir==='in'?'Router in ':'Router out ')+r.no,own:r.plate!==plateRaw(dir,r.n)})})});
+  plates.sort(function(a,b){return (a.where===''?1:0)-(b.where===''?1:0)||natCmp(a.where,b.where)||natCmp(a.mark,b.mark)});
+  PANELS.forEach(function(p){p.jacks.forEach(function(j,k){if(j.label||j.to)jacks.push({panel:p.name+(p.place?', '+p.place:''),jack:k+1,label:j.label,to:j.to,patch:j.patch?portText(j.patch):'Open'})})});
+  return {plates:plates,jacks:jacks}}
+function renderPlateSheet(){
+  var s=plateSheetRows(),h='<div class="field noprint"><button type="button" class="btn" data-act="plates-sheet-close">Back to Ports</button><div class="seg" role="group" aria-label="What to print"><button type="button" data-act="sheet-list" class="'+(plateSheetMode==='list'?'on':'')+'" aria-pressed="'+(plateSheetMode==='list')+'">Checklist</button><button type="button" data-act="sheet-labels" class="'+(plateSheetMode==='labels'?'on':'')+'" aria-pressed="'+(plateSheetMode==='labels')+'">Labels to cut out</button></div>'+(plateSheetMode==='labels'?'<select id="sheet-size" aria-label="Label size">'+LABEL_SIZES.map(function(z){return '<option value="'+z[0]+'"'+(z[0]===plateSheetSize?' selected':'')+'>'+z[1]+'</option>'}).join('')+'</select>':'')+'<button type="button" class="btn primary" data-act="plates-sheet-print">Print</button><button type="button" class="btn" data-act="plates-sheet-csv" title="One row per label, as a file that label-maker software can open">File for a label maker</button><label class="check"><input type="checkbox" id="sheet-own"'+(plateSheetOwn?' checked':'')+'>Only plates with their own marking</label>'+info('sheet','About making the labels',['<b>Checklist</b> is a list to print and carry: what each label says and where it goes, with a box to tick.','<b>Labels to cut out</b> prints the labels themselves at the size you choose, to cut apart. Use sticker paper, or plain paper behind a clear cover. Print at 100% scale, not "fit to page", or the size will be off.','<b>File for a label maker</b> saves one row per label. Label-maker software, such as Panduit Easy-Mark Plus, Brother P-touch Editor or Brady Workstation, can open the file and print a label for each row, so nothing is typed twice.'],true)+'</div>';
+  if(plateSheetOwn)s.plates=s.plates.filter(function(r){return r.own});
+  if(plateSheetMode==='labels'){var z=LABEL_SIZES.filter(function(x){return x[0]===plateSheetSize})[0]||LABEL_SIZES[1],grid=function(list){return '<div class="lblgrid">'+list.map(function(t){return '<div class="lbl" style="width:'+z[2]+'mm;height:'+z[3]+'mm;font-size:'+labelFont(t,z[2],z[3]).toFixed(2)+'mm">'+esc(t)+'</div>'}).join('')+'</div>'},jl=s.jacks.filter(function(r){return r.label}).map(function(r){return r.label});
+    h+='<section class="card panel"><h2>Wall plate labels</h2><p class="note" style="margin-bottom:10px">'+(s.plates.length?s.plates.length+(s.plates.length===1?' label':' labels')+', each '+z[2]+' by '+z[3]+' mm. Cut along the dashed lines.':(plateSheetOwn?'No wall plate has its own marking recorded.':'No router port is set up with a wall plate.'))+'</p>'+(s.plates.length?grid(s.plates.map(function(r){return r.mark})):'')+'</section>';
+    if(jl.length)h+='<section class="card panel"><h2>Patch panel jack labels</h2><p class="note" style="margin-bottom:10px">'+jl.length+(jl.length===1?' label.':' labels.')+'</p>'+grid(jl)+'</section>';
+    $('main').innerHTML=h;return}
+  h+='<section class="card panel"><h2>Wall plate labels</h2><p class="note" style="margin-bottom:10px">'+(s.plates.length?s.plates.length+(s.plates.length===1?' wall plate':' wall plates')+'. The first column is what the label should say.':(plateSheetOwn?'No wall plate has its own marking recorded.':'No router port is set up with a wall plate.'))+' Printed '+esc(new Date().toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'}))+'.</p>';
+  if(s.plates.length){h+='<div class="scroll"><table><thead><tr><th>Label says</th><th>Where the plate is</th><th>What it is for</th><th>Wired to</th><th style="width:60px">Done</th></tr></thead><tbody>';
+    s.plates.forEach(function(r){h+='<tr><td><b style="font-weight:600">'+esc(r.mark)+'</b></td><td>'+(r.where?esc(r.where):'<span class="empty">not recorded</span>')+'</td><td>'+esc(r.what)+'</td><td>'+esc(r.port)+'</td><td><span class="tickbox"></span></td></tr>'});
+    h+='</tbody></table></div>'}
+  h+='</section>';
+  if(s.jacks.length){h+='<section class="card panel"><h2>Patch panel jacks</h2><p class="note" style="margin-bottom:10px">'+s.jacks.length+(s.jacks.length===1?' jack':' jacks')+' with something recorded. A jack and the plate at the far end of its cable usually carry the same label.</p><div class="scroll"><table><thead><tr><th>Label says</th><th>Panel</th><th>Jack</th><th>Goes to</th><th>Patched to</th><th style="width:60px">Done</th></tr></thead><tbody>';
+    s.jacks.forEach(function(r){h+='<tr><td><b style="font-weight:600">'+(r.label?esc(r.label):'<span class="empty">no label recorded</span>')+'</b></td><td>'+esc(r.panel)+'</td><td>'+r.jack+'</td><td>'+esc(r.to)+'</td><td>'+esc(r.patch)+'</td><td><span class="tickbox"></span></td></tr>'});
+    h+='</tbody></table></div></section>'}
+  $('main').innerHTML=h}
 function renderPorts(){
+  if(plateSheet){renderPlateSheet();return}
   var devs=portDevs(),dev=portDevOf(portDev);portDev=dev.key;
   var isR=dev.key==='rtr',rows=portRows(dev.key,portDir),needle=portQ.trim().toLowerCase(),h='',plates=isR&&!!PORTS.plates[portDir];
   if(portErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(portErr)+'</p>';
@@ -913,10 +994,10 @@ function renderPorts(){
       h+='<div class="field" style="margin-top:12px">'+(pi.changes.length?'<button type="button" class="btn primary" data-act="ports-import-save">Save '+(pi.changes.length===1?'this change':'these changes')+'</button>':'')+'<button type="button" class="btn" data-act="ports-import-drop">'+(pi.changes.length?'Discard':'Close')+'</button></div>'}
     h+='</section>'}
   if(isR)h+=platesHtml();
-  if(LIVE&&role==='engineer'&&(dev.key==='rtr'||dev.key==='sw'))h+=renameHtml(dev.key);
+  if(LIVE&&role==='engineer'&&(dev.key==='rtr'||dev.key==='sw')&&renameShown(dev.key))h+=renameHtml(dev.key);
   var nRec=rows.filter(function(r){return r.room||r.connected||r.status||r.notes||r.want}).length,nRen=rows.filter(function(r){return r.checks.indexOf('Rename')>=0}).length,nOther=rows.filter(function(r){return r.checks.some(function(c){return c!=='Rename'})}).length;
   h+='<div class="field"><label for="port-dev" style="font-weight:500">Device</label><select id="port-dev">'+devs.map(function(d){return '<option value="'+esc(d.key)+'"'+(d.key===dev.key?' selected':'')+'>'+esc(d.name)+'</option>'}).join('')+'</select><div class="seg" role="group" aria-label="Which ports"><button type="button" data-portdir="in" class="'+(portDir==='in'?'on':'')+'" aria-pressed="'+(portDir==='in')+'">Inputs</button><button type="button" data-portdir="out" class="'+(portDir==='out'?'on':'')+'" aria-pressed="'+(portDir==='out')+'">Outputs</button></div><input type="search" id="port-q" placeholder="Camera" aria-label="Filter the port list" value="'+esc(portQ)+'"><label class="check"><input type="checkbox" id="port-only"'+(portOnly?' checked':'')+'>Only ports to check</label><span style="flex:1"></span><button type="button" class="btn" data-act="ports-export" title="Every port of every device, as a file that opens in Excel or Google Sheets">Export CSV</button>'+(LIVE?'<label class="btn" for="ports-file" style="cursor:pointer" title="Bring an edited export back in. You see every change before it is saved.">Import CSV</label><input type="file" id="ports-file" accept=".csv,text/csv,text/plain" style="position:absolute;width:1px;height:1px;opacity:0">':'')+'</div>';
-  h+='<div class="field"><span class="chip">'+rows.length+' ports</span><span class="chip">'+nRec+' recorded</span>'+(nRen?'<span class="chip warn">'+nRen+' to rename</span>':!rows.some(function(r){return r.target})?'<span class="chip">'+(isR?'Naming check is off':'No new labels recorded, so names are not checked')+'</span>':'<span class="chip ok">Every name matches</span>')+(nOther?'<span class="chip warn">'+nOther+' other to check</span>':'')+'</div>';
+  h+='<div class="field"><span class="chip">'+rows.length+' ports</span><span class="chip">'+nRec+' recorded</span>'+(nRen?'<span class="chip warn">'+nRen+' to rename</span>':!rows.some(function(r){return r.target})?'<span class="chip">'+(isR?'Naming check is off':'No new labels recorded, so names are not checked')+'</span>':'<span class="chip ok">Every name matches</span>')+(nOther?'<span class="chip warn">'+nOther+' other to check</span>':'')+info('ports-list','About this list',['Grey text is filled in by the app: the name it proposes under "Should be", and what it already knows under "Connected".','"Rename" means the label on the device is different from the name under "Should be".','Choose Edit on a row to record where a port goes, what is plugged in, its status and notes. Nothing on this page changes a device, except the Rename card.'])+'</div>';
   if(portOnly)rows=rows.filter(function(r){return r.checks.length});
   if(needle)rows=rows.filter(function(r){return [r.no,r.plate,r.l,r.room,r.connected,r.auto,statusText(r.status),r.notes,r.target].join(' ').toLowerCase().indexOf(needle)>=0});
   rows=sortRows(rows,SORTS.ports,function(r,k){return k==='port'?r.n:k==='plate'?r.plate:k==='label'?r.l:k==='room'?r.room:k==='conn'?(r.connected||r.auto):k==='status'?statusText(r.status):k==='now'?r.now:k==='notes'?r.notes:r.target});
@@ -930,12 +1011,13 @@ function renderPorts(){
     if(open){var d=portDraft,f=function(k,label,ph,hint){return '<div class="field devline"><label class="devk" for="pt-'+k+'">'+label+'</label><input type="text" id="pt-'+k+'" data-pt="'+k+'" value="'+esc(d[k]||'')+'" placeholder="'+esc(ph)+'" maxlength="'+(k==='notes'?200:60)+'" style="max-width:'+(k==='notes'?420:260)+'px">'+(hint?'<span class="note">'+hint+'</span>':'')+'</div>'};
       h+='<tr class="devedit"><td colspan="'+span+'">'+f('room','Location','Main hall, stage left','Where the far end of the cable is.')+f('connected','Connected','Handheld camera',r.auto?'The app already knows this port goes to: '+esc(r.auto)+'.':'What is plugged in at the far end.'+(isR&&plates?' It becomes the second part of the standard name.':''));
       if(isR&&PORTS.plates[r.dir]&&!rackEnd(r.dir,r.n))h+='<div class="field devline"><span class="devk">Wall plate</span><label class="check"><input type="checkbox" id="pt-plate" data-pt-plate="1"'+(d.plate?' checked':'')+'>This port ends at a wall plate</label><span class="note">'+(d.plate?'Its name starts with '+esc(plateRaw(r.dir,r.n))+'.':'Tick this for a port on a wall. Leave it for equipment in the rack.')+'</span></div>';
+      if(isR&&PORTS.plates[r.dir]&&!rackEnd(r.dir,r.n)&&d.plate)h+=f('mark','Plate is marked',plateRaw(r.dir,r.n),'What is printed on the plate. Change it only if this plate is not marked '+esc(plateRaw(r.dir,r.n))+'.');
       h+='<div class="field devline"><label class="devk" for="pt-status">Status</label><select id="pt-status" data-pt="status">'+PORT_STATUS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(d.status||'')?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>';
       h+=f('notes','Notes','Cable replaced March 2026','Only engineers see notes.')+f('want','New label',r.prop,(r.prop?'Leave this empty to use the standard name, '+esc(r.prop)+'. Fill it in only for a port that needs a different name.':'The name this port should carry.')+' Saving this records it and changes nothing on the device.');
       h+='<div class="field devline"><span class="devk"></span><button type="button" class="btn primary" data-act="port-save">Save</button><button type="button" class="btn" data-act="port-cancel">Cancel</button></div></td></tr>'}});
   if(!rows.length)h+='<tr><td colspan="'+span+'">'+(portOnly&&!needle?'Nothing here needs checking.':'No port matches that.')+'</td></tr>';
   h+='</tbody></table></div></section>';
-  h+='<p class="note">Grey text is filled in by the app: the name it proposes under "Should be", and what it already knows under "Connected". Nothing on this page changes a device, except the Rename card at the top.'+(LIVE?'':' Editing and importing need the live server.')+'</p>';
+  if(!LIVE)h+='<p class="note">Editing and importing need the live server.</p>';
   $('main').innerHTML=h}
 
 /* ---------- system map ---------- */
@@ -1162,7 +1244,7 @@ function renderSystem(){
   else dt+='<p class="empty" style="margin:0">This is every device the app knows about and how they are cabled. Select a box to see its connections port by port.</p>';
   dt+='</div>';
   h+='<section class="card panel">'+dt+'<div class="scroll"><svg viewBox="0 0 '+W+' '+(H+6)+'" role="group" aria-label="'+esc('Whole system. Feeding or looping through the router: '+m.L.map(function(b){return b.title}).join(', ')+'. Fed by the router: '+m.R.map(function(b){return b.title}).join(', ')+'.')+'" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div>';
-  h+='<p class="note" style="margin-top:12px">The router is in the middle. On the left are the sources plugged into it and the devices that take a feed and send one back. On the right is everything it feeds. Labels on the lines are router port numbers. A grey line marked "not set" is a device whose cabling has not been entered on the Devices page. The lines show cabling, not whether a picture is actually present.</p></section>';
+  h+='<p class="note" style="margin-top:12px">The lines show cabling, not whether a picture is actually present.'+info('map-system','How to read this map',['The router is in the middle. On the left are the sources plugged into it and the devices that take a feed and send one back. On the right is everything it feeds.','Labels on the lines are router port numbers. A grey line marked "not set" is a device whose cabling has not been entered on the Devices page.','A dot shows whether a device is answering. An amber edge means something about it needs a look. Select a box to see its connections port by port.'])+'</p></section>';
   $('main').innerHTML=h}
 
 function renderMap(){
@@ -1211,8 +1293,8 @@ function renderMap(){
   var nd=m.screens.filter(function(s){return s.drift}).length,nIn=Object.keys(m.nodes).filter(function(k){return m.nodes[k].col==='src'&&!m.nodes[k].unused}).length,nUn=Object.keys(m.nodes).filter(function(k){return m.nodes[k].unused}).length;
   h+='<div class="field"><span class="chip">'+m.screens.length+(m.dev?' outputs':mapScope==='all'?' router outputs':' screens')+'</span><span class="chip">'+nIn+(m.dev?' inputs in use':' sources in use')+'</span>'+(nUn?'<span class="chip">'+nUn+' unused</span>':'')+(nd?'<span class="chip warn">'+nd+(nd===1?' differs from ':' differ from ')+esc(refName())+'</span>':NORMAL?'<span class="chip ok">All match Normal service</span>':'<span class="chip">No Normal service saved, so nothing is marked as changed</span>')+'</div>';
   if(!m.screens.length&&!nUn)h+='<section class="card panel"><p class="empty">Nothing matches that. Clear the filters to see everything.</p></section>';
-  else if(chain)h+='<section class="card panel"><!--detail-->'+chainHtml(chain)+'<p class="note" style="margin-top:12px">Blue boxes are the router and purple boxes are a switcher or converter. '+(flowMode==='plumbing'?'This is the plumbing only: what each mix is cut to is left out. ':'')+'It shows how things are routed, not whether a picture is actually present.</p></section>';
-  else h+='<section class="card panel"><!--detail--><div class="scroll"><svg viewBox="0 0 '+W+' '+m.H+'" role="group" aria-label="System map" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div><p class="note" style="margin-top:12px">Select a column heading to sort by it. Amber marks an output that differs from '+esc(refName())+'. '+(m.dev?'':'Blue boxes are router ports and purple boxes are '+(CONVS.length?'the switcher or a converter. ':'inside the switcher. ')+(flowMode==='plumbing'?'This is the plumbing only: what each mix is cut to is left out. ':''))+(mapUnused?'Dashed boxes are inputs that feed nothing shown here. ':'')+'Colours show how things are routed, not whether a picture is actually present.</p></section>';
+  else if(chain)h+='<section class="card panel"><!--detail-->'+chainHtml(chain)+'<p class="note" style="margin-top:12px">'+(flowMode==='plumbing'?'Plumbing only: what each mix is cut to is left out. ':'')+'This shows how things are routed, not whether a picture is actually present.'+info('map-chain','How to read this path',['Read it from left to right, source to screen. Each box is one device, with the port the picture comes in on and the port it leaves on.','Blue boxes are the router. Purple boxes are a switcher or converter. A box with an amber edge needs a look.','If the picture looks wrong, start at the source and follow the arrows. The first point that looks wrong is where the problem is.'])+'</p></section>';
+  else h+='<section class="card panel"><!--detail--><div class="scroll"><svg viewBox="0 0 '+W+' '+m.H+'" role="group" aria-label="System map" style="display:block;width:100%;min-width:900px;height:auto;font-family:var(--sans)">'+svg+'</svg></div><p class="note" style="margin-top:12px">'+(!m.dev&&flowMode==='plumbing'?'Plumbing only: what each mix is cut to is left out. ':'')+'This shows how things are routed, not whether a picture is actually present.'+info('map-grid','How to read this map',['Select a screen to follow its picture from source to screen. Select any box on the way to see everything that passes through it.','Select a column heading to sort by it.','Amber marks an output that differs from '+esc(refName())+'.'+(m.dev?'':' Blue boxes are router ports and purple boxes are '+(CONVS.length?'the switcher or a converter.':'inside the switcher.')),'Dashed boxes, shown with "Include unused inputs", are inputs that feed nothing here.'])+'</p></section>';
   var dt='<div id="map-detail" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)">';
   var ss=m.screens.filter(function(s){return s.key===mapSel})[0],clr='<button type="button" class="btn" data-act="mapclear">'+(chain?'Back to the whole map':'Clear selection')+'</button>';
   if(ss&&ss.d!==undefined){var ds=describe(ss.d,flowMode==='plumbing'),g=groupOf(ss.d);
@@ -1426,7 +1508,7 @@ function renderDevices(){
   var rows=devRows(),h='';
   if(devErr)h+='<p style="color:var(--bad);font-size:13px">'+esc(devErr)+'</p>';
   var todo=LIVE?rows.filter(function(r){return r.sug&&r.sug.fresh&&r.sug.posts.length}):[];
-  if(todo.length){h+='<section class="card panel"><h2>Cabling found in the router\'s labels</h2><p class="note" style="margin-bottom:10px">The devices do not report what is plugged into them, but the names on the router\'s ports show it for '+(todo.length===1?'one device':todo.length+' devices')+'. Check that these are right, then fill them in.</p><ul class="finds">';
+  if(todo.length){h+='<section class="card panel"><h2>Cabling found in the router\'s labels'+info('dev-cabling','About cabling',['Devices do not report what is plugged into them. The only clue the system holds is the names on the router\'s ports, such as REC-IN-01, so the app reads those.','Nothing is saved until you choose to fill them in. Each device\'s Edit panel shows the same suggestion.'])+'</h2><p class="note" style="margin-bottom:10px">The router\'s port names show how '+(todo.length===1?'one device is':todo.length+' devices are')+' cabled. Check these, then fill them in.</p><ul class="finds">';
     todo.forEach(function(r){h+='<li><b>'+esc(r.name||r.model||r.role)+'</b>'+(r.place?' in '+esc(r.place):'')+': '+esc(r.sug.text)+'.</li>'});
     h+='</ul><div class="field" style="margin-top:10px"><button type="button" class="btn primary" data-act="dev-suggest-all">Fill '+(todo.length===1?'this':'these')+' in</button></div></section>'}
   var shown=sortRows(rows,SORTS.dev,function(r,k){return k==='name'?(r.name||r.model||''):k==='type'?r.role:k==='place'?(r.place||''):k==='ip'?ipNum(r.ip):k==='state'?r.state.text:r.conn});
@@ -1442,7 +1524,7 @@ function renderDevices(){
   else{
   h+='<p class="note">Select a column heading to sort. Select Edit to set where a device is and how it is cabled to the router.</p>';
   var guess=devForm.subnet||(ADDR.rtr?ADDR.rtr.split('.').slice(0,3).join('.'):'');
-  h+='<section class="card panel"><h2>Add devices</h2><p class="note" style="margin-bottom:10px">Search a network for Blackmagic routers, switchers, HyperDeck recorders, Teranex converters, SmartView monitors and Magewell NDI converters. The search asks each address who it is, only reads the greeting and changes nothing. Devices on another network, such as an NDI network, are found by entering that network here.</p>';
+  h+='<section class="card panel"><h2>Add devices'+info('dev-add','About adding devices',['The search finds Blackmagic routers, switchers, HyperDeck recorders, Teranex converters, SmartView monitors and Magewell NDI converters.','It asks each address on the network who it is, reads only the greeting, and changes nothing.','Devices on another network, such as an NDI network, are found by entering that network\'s first three numbers.','A second router or an extra switcher can be added as a room device. Paths are traced through the main router and switcher, and on into a room switcher whose building feed is set.'])+'</h2>';
   h+='<div class="field devline"><label class="devk" for="dev-subnet">Search a network</label><input type="text" id="dev-subnet" data-devf="subnet" value="'+esc(guess)+'" placeholder="10.0.0" aria-describedby="dev-subnet-hint" style="max-width:160px"><button type="button" class="btn primary" data-act="dev-scan">'+(devBusy?'Searching…':'Find devices')+'</button><span class="note" id="dev-subnet-hint">The first three numbers of the address.</span></div>';
   if(devScan){
     if(!devScan.found.length)h+='<p class="empty" style="margin-top:12px">Nothing this app knows answered on '+esc(devScan.searched.join(', '))+'.</p>';
@@ -1455,7 +1537,7 @@ function renderDevices(){
       h+='</div>'}
     if(devScan.other)h+='<p class="note" style="margin:10px 0">'+devScan.other+(devScan.other===1?' other address':' other addresses')+' answered but reported no router or switcher, so '+(devScan.other===1?'it is':'they are')+' not listed.</p>'}
   h+='<div class="field devline"><label class="devk" for="dev-ip">Or add one by address</label><input type="text" id="dev-ip" data-devf="ip" value="'+esc(devForm.ip)+'" placeholder="10.0.0.20" aria-label="Device address" style="max-width:150px"><input type="text" id="dev-newplace" data-devf="place" value="'+esc(devForm.place)+'" placeholder="Where it is" aria-label="Where the device is" style="max-width:170px">'+roleSelect('id="dev-role" data-devf="role" aria-label="How to use this device"',devForm.role)+'<button type="button" class="btn" data-act="dev-add-manual">Add device</button></div>';
-  h+='<p class="note" style="margin-top:12px">A second router or an extra switcher can be added as a room device. It shows here and on the System map. Paths are traced through the main router and main switcher, and on into a room switcher whose building feed is set.</p></section>'}
+  h+='</section>'}
   if(SW.mix){h+='<section class="card"><div class="scroll"><table><thead><tr><th>Switcher mix</th><th>On program</th><th>On preview</th></tr></thead><tbody>';
     SW.mix.me.forEach(function(m,i){h+='<tr><td>'+esc(mixName(i+1))+'</td><td>'+esc(m.pgm.name)+'</td><td>'+esc(m.pvw.name)+'</td></tr>'});h+='</tbody></table></div></section>'}
   $('main').innerHTML=h}
@@ -1472,16 +1554,19 @@ function render(){
   else if(view==='overview')renderOverview();else if(view==='room')renderRoom();else if(view==='map')renderMap();else if(view==='floor')renderFloor();else if(view==='patch')renderPatch();else if(view==='ports')renderPorts();else if(view==='panels')renderPanels();else if(view==='spaces')renderSpaces();else renderDevices();
   renderBar();
   if(fid&&$(fid)){$(fid).focus();if(pos!=null){try{$(fid).setSelectionRange(pos,pos)}catch(e){}}}}
-function go(v,room){view=v;if(v==='room'){roomId=room;pick=null;q='';showAll=false}var h=v==='room'?'room-'+room:v;try{if(location.hash!=='#'+h)location.hash=h}catch(e){}render();window.scrollTo(0,0)}
+function go(v,room){view=v;plateSheet=false;if(v==='room'){roomId=room;pick=null;q='';showAll=false}var h=v==='room'?'room-'+room:v;try{if(location.hash!=='#'+h)location.hash=h}catch(e){}render();window.scrollTo(0,0)}
 
 document.addEventListener('click',function(e){
+  var ib=e.target.closest('[data-info]');
+  if(ib){var iid=ib.getAttribute('data-info'),was=infoOpen===iid;infoClose();if(!was){infoOpen=iid;ib.setAttribute('aria-expanded','true');var ip=ib.parentNode.querySelector('.infopop');if(ip)ip.classList.add('open')}else ib.blur();return}
+  if(infoOpen&&!e.target.closest('.infowrap'))infoClose();
   var b=e.target.closest('[data-act]');
   if(b){var a=b.dataset.act;
     if(a==='yes'&&pending){if(pending.raw){var f=pending.fn;pending=null;f();render()}else commit(pending.fn,pending.log)}
     else if(a==='no'){pending=null;renderBar()}
     else if(a==='dismiss'){toast=null;renderBar()}
     else if(a==='mapclear'){mapSel=null;render()}
-    else if(a==='port-edit'){var pe={dev:b.dataset.dev,dir:b.dataset.dir,n:+b.dataset.n};if(portOpen&&portOpen.dev===pe.dev&&portOpen.dir===pe.dir&&portOpen.n===pe.n){portOpen=null;portDraft=null}else{var pr0=portStore(pe.dev)[pe.dir][pe.n]||{};portOpen=pe;portDraft={room:pr0.room||'',connected:pr0.connected||'',status:pr0.status||'',notes:pr0.notes||'',want:pr0.want||'',plate:pe.dev==='rtr'&&!!plateName(pe.dir,pe.n)}}render()}
+    else if(a==='port-edit'){var pe={dev:b.dataset.dev,dir:b.dataset.dir,n:+b.dataset.n};if(portOpen&&portOpen.dev===pe.dev&&portOpen.dir===pe.dir&&portOpen.n===pe.n){portOpen=null;portDraft=null}else{var pr0=portStore(pe.dev)[pe.dir][pe.n]||{};portOpen=pe;portDraft={room:pr0.room||'',connected:pr0.connected||'',status:pr0.status||'',notes:pr0.notes||'',want:pr0.want||'',plate:pe.dev==='rtr'&&!!plateName(pe.dir,pe.n),mark:pe.dev==='rtr'?(pr0.plate||plateRaw(pe.dir,pe.n)):''}}render()}
     else if(a==='rename-open'){renameOpen=true;renameFail=null;render()}
     else if(a==='rename-close'){renameOpen=false;renameSkip={};render()}
     else if(a==='rename-all'){renameSkip={};render()}
@@ -1491,6 +1576,11 @@ document.addEventListener('click',function(e){
     else if(a==='rename-undo'){var ru=RENAMES.filter(function(x){return x.id===b.dataset.id})[0];
       if(ru){var udev=ru.dev||'rtr',uw=renameWords(udev),back=ru.changes.map(function(c){return {dir:c.dir,port:c.port,from:c.to,to:c.from}});pending={raw:true,yes:'Put them back',text:'Put '+back.length+(back.length===1?' name':' names')+' on '+uw.the+' back to what '+(back.length===1?'it was':'they were')+' before that rename? One renamed again since then is left alone.',fn:function(){renameSend(back,true,udev)}};renderBar()}}
     else if(a==='plates-open'){plateOpen=true;portErr='';plateDraft={in:PORTS.plates.in||'',out:PORTS.plates.out||'',inOn:PORTS.plates.in?portsText(platePorts('in')):'',outOn:PORTS.plates.out?portsText(platePorts('out')):''};render()}
+    else if(a==='plates-sheet'){plateSheet=true;render();window.scrollTo(0,0)}
+    else if(a==='plates-sheet-close'){plateSheet=false;render()}
+    else if(a==='plates-sheet-print'){window.print()}
+    else if(a==='sheet-list'||a==='sheet-labels'){plateSheetMode=a==='sheet-labels'?'labels':'list';render()}
+    else if(a==='plates-sheet-csv'){saveFile(labelsCsv(plateSheetOwn),'venue-router-labels.csv')}
     else if(a==='plates-cancel'){plateOpen=false;plateDraft=null;portErr='';render()}
     else if(a==='plates-save'){var pd=plateDraft||{},pb={in:(pd.in||'').trim(),out:(pd.out||'').trim()},bad='';
       ['in','out'].forEach(function(k){var raw=(pd[k+'On']||'').trim(),max=(k==='in'?RT.inL:RT.outL).length;
@@ -1524,11 +1614,11 @@ document.addEventListener('click',function(e){
     else if(a==='jack-save'){var sp=PANELS.filter(function(x){return panelEdit&&x.id===panelEdit.p})[0];if(!sp)return;var sd=panelEdit.draft,sm=/^(in|out):(\d+)$/.exec(sd.patch||'');
       sp.jacks[panelEdit.j]={label:(sd.label||'').trim(),to:(sd.to||'').trim(),patch:sm?{dir:sm[1],port:+sm[2]}:null};panelEdit=null;savePanels('Saved for everyone.');render()}
     else if(a==='port-cancel'){portOpen=null;portDraft=null;render()}
-    else if(a==='port-save'){if(portOpen&&portDraft){var ps={dev:portOpen.dev,dir:portOpen.dir,port:portOpen.n,room:portDraft.room,connected:portDraft.connected,status:portDraft.status,notes:portDraft.notes,want:portDraft.want};var pbody={set:[ps]};if(ps.dev==='rtr'&&PORTS.plates[ps.dir]&&!!portDraft.plate!==!!plateName(ps.dir,ps.port)){var pset={},pcur=platePorts(ps.dir);Object.keys(pcur).forEach(function(k){pset[k]=1});if(portDraft.plate)pset[ps.port]=1;else delete pset[ps.port];pbody.plates={};pbody.plates[ps.dir+'On']=portsText(pset)||'none'}
+    else if(a==='port-save'){if(portOpen&&portDraft){var pmk=(portDraft.mark||'').trim(),ps={dev:portOpen.dev,dir:portOpen.dir,port:portOpen.n,room:portDraft.room,connected:portDraft.connected,status:portDraft.status,notes:portDraft.notes,want:portDraft.want,plate:portOpen.dev==='rtr'&&portDraft.plate&&pmk&&pmk!==plateRaw(portOpen.dir,portOpen.n)?pmk:''};var pbody={set:[ps]};if(ps.dev==='rtr'&&PORTS.plates[ps.dir]&&!!portDraft.plate!==!!plateName(ps.dir,ps.port)){var pset={},pcur=platePorts(ps.dir);Object.keys(pcur).forEach(function(k){pset[k]=1});if(portDraft.plate)pset[ps.port]=1;else delete pset[ps.port];pbody.plates={};pbody.plates[ps.dir+'On']=portsText(pset)||'none'}
       portOpen=null;portDraft=null;portsPost(pbody,'Saved for everyone.');render()}}
-    else if(a==='ports-export'){var blob=new Blob([portsCsv()],{type:'text/csv;charset=utf-8'}),lnk=document.createElement('a');lnk.href=URL.createObjectURL(blob);lnk.download='venue-router-ports.csv';document.body.appendChild(lnk);lnk.click();lnk.remove();setTimeout(function(){URL.revokeObjectURL(lnk.href)},1000)}
+    else if(a==='ports-export'){saveFile(portsCsv(),'venue-router-ports.csv')}
     else if(a==='ports-import-drop'){portImport=null;render()}
-    else if(a==='ports-import-save'){if(portImport&&portImport.changes){var pset=portImport.changes.map(function(c){return {dev:c.dev,dir:c.dir,port:c.port,room:c.rec.room,connected:c.rec.connected,status:c.rec.status,notes:c.rec.notes,want:c.rec.want}}),pn=pset.length;portImport=null;portsPost({set:pset},pn+(pn===1?' port saved.':' ports saved.'));render()}}
+    else if(a==='ports-import-save'){if(portImport&&portImport.changes){var pset=portImport.changes.map(function(c){return {dev:c.dev,dir:c.dir,port:c.port,room:c.rec.room,connected:c.rec.connected,status:c.rec.status,notes:c.rec.notes,want:c.rec.want,plate:c.rec.plate}}),pn=pset.length;portImport=null;portsPost({set:pset},pn+(pn===1?' port saved.':' ports saved.'));render()}}
     else if(a==='sys-open'){mapScope=b.dataset.id;mapSel=null;render();window.scrollTo(0,0)}
     else if(a==='sys-space'){space=b.dataset.g;mapScope='rooms';mapSel=null;pick=null;render();window.scrollTo(0,0)}
     else if(a==='dev-edit'){devOpen=devOpen===b.dataset.id?null:b.dataset.id;render()}
@@ -1603,6 +1693,7 @@ document.addEventListener('click',function(e){
   if((t=e.target.closest('[data-dest]'))){var d=+t.dataset.dest;pick=pick===d?null:d;render();return}
   if((t=e.target.closest('[data-room]'))){go('room',t.dataset.room);return}
   if((t=e.target.closest('[data-row]'))){showPath(+t.dataset.row)}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){var ia=document.activeElement;infoClose();if(ia&&ia.classList&&ia.classList.contains('infobtn'))ia.blur()}});
 document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;var t=e.target;if(t.matches&&t.matches('[data-dest],[data-row],[data-room],[data-map],text[data-sort]')){e.preventDefault();t.click()}});
 document.addEventListener('change',function(e){var t=e.target;
   if(t.id==='floor-file'){var f=t.files&&t.files[0];if(!f)return;
@@ -1619,6 +1710,8 @@ document.addEventListener('change',function(e){var t=e.target;
   else if(t.dataset.pj){if(panelEdit)panelEdit.draft[t.dataset.pj]=t.value}
   else if(t.id==='port-dev'){portDev=t.value;portOpen=null;portDraft=null;renameOpen=false;renameSkip={};renameFail=null;render()}
   else if(t.id==='port-only'){portOnly=t.checked;render()}
+  else if(t.id==='sheet-own'){plateSheetOwn=t.checked;render()}
+  else if(t.id==='sheet-size'){plateSheetSize=t.value;render()}
   else if(t.dataset.ptPlate){if(portDraft){portDraft.plate=t.checked;render()}}
   else if(t.dataset.pt){if(portDraft)portDraft[t.dataset.pt]=t.value}
   else if(t.dataset.roomLink){var rlo=$('rl-out-'+t.dataset.roomLink),rli=$('rl-in-'+t.dataset.roomLink);devPost({action:'room-link',id:t.dataset.roomLink,rtrOut:rlo.value===''?null:+rlo.value,input:rli.value===''?null:+rli.value},'Saved for everyone.')}
@@ -1674,6 +1767,6 @@ function fromHash(){var h=(location.hash||'').replace('#','');if(h.indexOf('room
 window.addEventListener('hashchange',fromHash);
 fromHash();
 /* For the tests in test/: hands the page's own functions to a caller that asked for them. Nothing in a browser sets VENUE_TEST. */
-if(window.VENUE_TEST)window.VENUE_TEST({trace:trace,describe:describe,roomTrace:roomTrace,chainBoxes:chainBoxes,stages:stages,findings:findings,suggest:suggest,devRows:devRows,mapModel:mapModel,sysModel:sysModel,portRows:portRows,portDesc:portDesc,proposedLabel:proposedLabel,renameCount:renameCount,renameList:renameList,knownEnd:knownEnd,parseCsv:parseCsv,portsCsv:portsCsv,readPortsCsv:readPortsCsv,csvCell:csvCell,sortRows:sortRows,ranges:ranges,natCmp:natCmp,plainIn:plainIn,plainOut:plainOut,inName:inName,outName:outName,clean:clean,plateName:plateName,rackEnd:rackEnd,patchOf:patchOf,jackDiffers:jackDiffers,panelStats:panelStats,patchClash:patchClash,parsePorts:parsePorts,portsText:portsText,platePorts:platePorts,setSort:function(t,v){SORTS[t]=v}});
+if(window.VENUE_TEST)window.VENUE_TEST({info:info,trace:trace,describe:describe,roomTrace:roomTrace,chainBoxes:chainBoxes,stages:stages,findings:findings,suggest:suggest,devRows:devRows,mapModel:mapModel,sysModel:sysModel,portRows:portRows,portDesc:portDesc,proposedLabel:proposedLabel,renameCount:renameCount,renameList:renameList,knownEnd:knownEnd,parseCsv:parseCsv,portsCsv:portsCsv,readPortsCsv:readPortsCsv,csvCell:csvCell,sortRows:sortRows,ranges:ranges,natCmp:natCmp,plainIn:plainIn,plainOut:plainOut,inName:inName,outName:outName,clean:clean,plateName:plateName,rackEnd:rackEnd,plateSheetRows:plateSheetRows,labelsCsv:labelsCsv,labelFont:labelFont,renameShown:renameShown,patchOf:patchOf,jackDiffers:jackDiffers,panelStats:panelStats,patchClash:patchClash,parsePorts:parsePorts,portsText:portsText,platePorts:platePorts,setSort:function(t,v){SORTS[t]=v}});
 })();
 </script>

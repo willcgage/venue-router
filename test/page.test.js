@@ -279,3 +279,97 @@ test('patch panels are drawn on the whole-system view, on the side their patches
   const without = loadPage(fixture.snapshot()).sysModel();
   assert.equal(parseInt(m.L[0].title, 10), parseInt(without.L[0].title, 10) - 1);
 });
+
+test('a wall plate can carry its own marking', () => {
+  const reg = fixture.ports();
+  reg.plates.outOn = '7-9, 12';
+  reg.rtr.out[6] = { plate: 'TV-LOBBY', room: 'Lobby' };          // router out 7, labelled "Lobby TV"
+  reg.rtr.out[7] = { plate: 'FOYER' };                            // router out 8, labelled "8: Foyer"
+  reg.rtr.out[8] = { plate: 'GR1', connected: 'GR1 confidence' }; // router out 9, labelled "Green Room"
+  const p = loadPage({ ...fixture.snapshot(), ports: reg });
+  const outs = p.portRows('rtr', 'out');
+
+  assert.equal(row(outs, 7).plate, 'TV-LOBBY');
+  assert.equal(target(outs, 7), 'TV-LOBBY Lobby TV', 'its own marking goes in front, like any plate name');
+  assert.equal(target(outs, 8), 'FOYER', 'when the marking and the description say the same thing, it is said once');
+  assert.equal(target(outs, 9), 'GR1 confidence', 'a description that already starts with the marking is not given it twice');
+  assert.equal(row(outs, 12).plate, 'RTR-OUT-12', 'a plate with no marking of its own uses the usual one');
+
+  // The sheet for the label maker: every wall plate, then every patch panel jack with something recorded
+  const withPanel = loadPage({ ...fixture.snapshot(), ports: reg, panels: [{ id: 'a', name: 'Video patch A', place: 'Rack room', jacks: [
+    { label: 'TV-LOBBY', to: 'Lobby TV plate', patch: { dir: 'out', port: 6 } }, { label: '', to: '', patch: null }, { label: 'SPARE-2', to: '', patch: null }] }] });
+  const sheet = plain(withPanel.plateSheetRows());
+  assert.deepEqual(sheet.plates.filter(r => r.own).map(r => r.mark).sort(), ['FOYER', 'GR1', 'TV-LOBBY']);
+  assert.equal(sheet.plates[0].where, 'Lobby', 'plates with a place recorded come first');
+  const lobby = sheet.plates.filter(r => r.mark === 'TV-LOBBY')[0];
+  assert.deepEqual([lobby.what, lobby.port], ['Lobby TV', 'Router out 7']);
+  assert.ok(sheet.plates.some(r => r.mark === 'RTR-IN-4' && r.what === 'Stage camera' && r.port === 'Router in 4'));
+  assert.deepEqual(sheet.jacks.map(j => [j.jack, j.label, j.patch]), [[1, 'TV-LOBBY', 'Router out 7 · Lobby TV'], [3, 'SPARE-2', 'Open']], 'a jack with nothing recorded is left off');
+});
+
+test('an information button carries its text and says what it is about', () => {
+  const p = loadPage(fixture.snapshot());
+  const html = p.info('demo', 'About the demo', ['First point.', 'Second point.']);
+  assert.ok(html.includes('<button type="button" class="infobtn" data-info="demo" aria-expanded="false" aria-label="About the demo">i</button>'));
+  assert.match(html, /role="note"/);
+  assert.equal(html.split('class="ip"').length - 1, 2);
+  assert.ok(!/<p[ >]/.test(html), 'no paragraph tags, because the button often sits inside a paragraph or heading');
+  assert.equal(p.info('demo', 'About the demo', 'One sentence.').split('class="ip"').length - 1, 1);
+});
+
+test('labels can be saved as a file for a label maker, and sized to fit when printed', () => {
+  const reg = fixture.ports();
+  reg.plates.outOn = '7';
+  reg.rtr.out[6] = { room: 'Lobby', connected: 'Lobby TV', plate: 'TV-LOBBY' };
+  const p = loadPage({ ...fixture.snapshot(), ports: reg, panels: [{ id: 'a', name: 'Video patch A', place: 'Rack room', jacks: [
+    { label: 'MON1', to: 'Control room', patch: { dir: 'out', port: 6 } }, { label: '', to: 'Somewhere', patch: null }] }] });
+  const rows = p.parseCsv(p.labelsCsv(false));
+  assert.deepEqual(plain(rows[0]), ['Label', 'Kind', 'Where', 'For', 'Wired to']);
+  assert.deepEqual(plain(rows.filter(r => r[0] === 'TV-LOBBY')), [['TV-LOBBY', 'Wall plate', 'Lobby', 'Lobby TV', 'Router out 7']]);
+  assert.deepEqual(plain(rows.filter(r => r[1] === 'Patch panel jack')), [['MON1', 'Patch panel jack', 'Video patch A, Rack room, jack 1', 'Control room', 'Router out 7 · Lobby TV']], 'a jack with no label is left out: there is nothing to print');
+  const own = p.parseCsv(p.labelsCsv(true)).filter(r => r[1] === 'Wall plate');
+  assert.deepEqual(plain(own.map(r => r[0])), ['TV-LOBBY'], 'only plates with their own marking, when asked');
+
+  // text fills the height of a short marking and shrinks to the width for a long one
+  assert.ok(Math.abs(p.labelFont('MON1', 38, 13) - 13 * 0.62) < 0.01);
+  const long = p.labelFont('RTR-OUT-120 STAGE LEFT', 38, 13);
+  assert.ok(long < 13 * 0.62 && long * 0.62 * 'RTR-OUT-120 STAGE LEFT'.length <= 34.01, 'a long marking still fits across the label');
+});
+
+test('the Plate column of a spreadsheet is read back in, only for ports that have a plate', () => {
+  const p = loadPage(fixture.snapshot());
+  const file = cells => 'Device,Direction,Port,Plate\r\n' + cells.map(c => c.join(',')).join('\r\n') + '\r\n';
+  const got = p.readPortsCsv(file([['Router', 'Output', 8, 'FOYER'], ['Router', 'Output', 12, 'RTR-OUT-12'], ['Router', 'Output', 13, ''], ['Router', 'Output', 1, 'WRONG']]), 'x.csv');
+  assert.equal(got.error, undefined);
+  assert.deepEqual(plain(got.changes.map(c => [c.dir, c.port, c.rec.plate, c.diffs])), [['out', 7, 'FOYER', [{ name: 'Plate', from: 'RTR-OUT-8', to: 'FOYER' }]]],
+    'the usual marking and an empty cell change nothing');
+  assert.ok(got.warn.some(w => /no wall plate/.test(w)), 'a marking on a port tied to the switcher is left out, and said so');
+
+  // the usual marking clears an own one
+  const reg = fixture.ports();
+  reg.rtr.out[7] = { plate: 'FOYER' };
+  const back = loadPage({ ...fixture.snapshot(), ports: reg }).readPortsCsv(file([['Router', 'Output', 8, 'RTR-OUT-8']]), 'x.csv');
+  assert.deepEqual(plain(back.changes.map(c => [c.port, c.rec.plate])), [[7, '']]);
+});
+
+test('the rename card stays off the page until it has something to say', () => {
+  const fresh = loadPage(fixture.snapshot({ withPorts: false }));
+  assert.equal(fresh.renameShown('rtr'), false, 'no plates set up: nothing is proposed, so no card');
+  assert.equal(fresh.renameShown('sw'), false);
+  const setUp = loadPage(fixture.snapshot());
+  assert.equal(setUp.renameShown('rtr'), true, 'with the naming check on, the router card is there');
+  assert.equal(setUp.renameShown('sw'), false, 'no switcher input has a new label waiting');
+  const reg = fixture.ports();
+  reg.sw = { in: { 1: { want: 'Cam 1 wide' } }, out: {} };
+  assert.equal(loadPage({ ...fixture.snapshot(), ports: reg }).renameShown('sw'), true);
+  const undoable = loadPage({ ...fixture.snapshot({ withPorts: false }), renames: [{ id: 'a', t: 1, dev: 'rtr', undo: false, changes: [{ dir: 'in', port: 2, from: 'a', to: 'b' }] }] });
+  assert.equal(undoable.renameShown('rtr'), true, 'a rename that can be undone keeps the card');
+});
+
+test('a snapshot that only knows where recorders and converters are still puts them on the whole-system map', () => {
+  const snap = fixture.snapshot();
+  snap.decks = [{ id: 'rec-1', place: 'Rack', feed: 4, returns: [6] }];
+  snap.convs = [{ id: 'conv-1', place: 'Rack', feeds: [5], returns: [7] }];
+  const keys = JSON.stringify(plain(loadPage(snap).sysModel()));
+  assert.ok(keys.includes('sys:rec-1') && keys.includes('sys:conv-1'));
+});

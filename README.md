@@ -17,6 +17,12 @@ There is no installer yet. See [Download and install](#download-and-install) for
 - **Ports** (Engineer): a register of every port on the router and the switchers: its wall plate, what is plugged in, a status, notes and the name it should carry. It checks every name against a standard, and exports to a spreadsheet and imports back.
 - **Devices**: what is connected, where it is, and what each switcher mix is on.
 
+### Information buttons
+
+Sections that need explaining have a small round **i** button beside their heading or their one-line summary. Hovering over it, or tabbing to it, shows the explanation. Selecting it keeps the text open, which is how it works on a touch screen; select it again, select anywhere else, or press Escape to close it. On a phone the text appears along the bottom of the screen.
+
+The pages show what is true right now and what you can do. How a section works, and why, is behind its **i**.
+
 ### Volunteer and Engineer
 
 The app opens in **Volunteer** view, which is a separate, much simpler interface:
@@ -402,7 +408,7 @@ The hardware knows a port's label and nothing else. The **Ports** page in the En
 
 | Column | What it holds |
 |---|---|
-| Plate | Router only. The name on the wall plate, for ports that end at one. Empty for everything else. See below |
+| Plate | Router only. What is printed on the wall plate, for ports that end at one. Empty for everything else. See below |
 | Hardware label | What the device calls the port now. Read from the device, never changed |
 | Should be | The name the port ought to carry, and whether the hardware label matches it |
 | Location | Where the far end of the cable is: a room, a position, a rack |
@@ -421,6 +427,18 @@ Some router ports end at a plate on a wall, and the rest go to equipment in the 
 - **Which ports have a plate**, as port numbers and ranges such as `66-96, 113-120`.
 
 You usually only enter the first. The app works out which ports have a plate from their labels: a port already named after its plate (`RTR-IN-66`, `RTR-IN-67 Stage camera`), or one that carries its own port number (`70: Podium`). The card shows what it found, marked "Worked out from the labels". If that is right there is nothing more to do. If a port is missing or should not be there, choose **Change** and edit the ranges, or tick or untick "This port ends at a wall plate" when editing a single port. A port tied to the switcher, a recorder or a converter is never treated as a plate, even inside a range.
+
+**A plate with its own marking.** Not every plate follows the pattern: one behind a display might say `MON1`. When editing a port that ends at a wall plate, the box **Plate is marked** holds what is printed on it. It is filled in with the usual marking, so it only needs changing for a plate that is different. That marking then takes the plate's place in the port's standard name. If the marking and the description say the same thing, as with a plate marked `MON1` on a port labelled `MON 1`, the name is just `MON1`.
+
+**Making the plate labels.** "Make plate labels" on the Wall plates card opens every wall plate, with patch panel jacks below. "Only plates with their own marking" shortens it to the plates that do not follow the pattern. There are three ways to get the labels made:
+
+| Choice | What you get | Use it when |
+|---|---|---|
+| Checklist | A list to print: what each label should say, where the plate is, what it is for and which router port it is wired to, with a box to tick | You type the labels into a label maker by hand, or want a list to walk the building with |
+| Labels to cut out | The labels themselves, printed at the size you pick (small, medium or large), with dashed lines to cut along | There is no label maker. Print on sticker paper, or on plain paper to go behind a clear cover |
+| File for a label maker | `venue-router-labels.csv`, one row per label, with the label text in the first column | Your label maker has software for a computer. Panduit Easy-Mark Plus, Brother P-touch Editor and Brady Workstation can each open a spreadsheet file and print one label per row, so nothing is typed twice |
+
+Print with the Print button or the browser's own print command; the menus are left off the paper. For labels to cut out, set the print scale to 100%, not "fit to page", or the labels come out the wrong size. The app does not send anything to a label maker itself: a handheld label maker is driven by its own software, and the file is what that software reads.
 
 A port whose label is only its plate name, such as `RTR-IN-66`, is a plate and not an unnamed port. Once "Connected" is filled in for it, that name is shown across the app in place of the plate name, "Named only" stops hiding it, and Full patch stops listing it under Worth a look.
 
@@ -463,7 +481,7 @@ The check tells you what to change. Recording and checking change nothing on a d
 
 Router names can be typed into Videohub Setup, or sent from the Ports page. This is the only thing the app ever writes to a device.
 
-1. Under **Rename on the router**, choose "Review renames". The list shows every router port whose label differs from "Should be", with the label now and what it will become.
+1. Under **Rename on the router**, choose "Review renames". The card appears once wall plates are set up, since no names are proposed before then. The list shows every router port whose label differs from "Should be", with the label now and what it will become.
 2. Untick any port to leave it alone.
 3. Choose "Rename ports on the router" and confirm.
 
@@ -500,7 +518,8 @@ Room switchers cannot be renamed from the app. Their names are checked here and 
 "Export as CSV" saves every port of every device as one file that opens in Excel or Google Sheets, with the proposed name and what needs doing on each row. Edit it there, save it as CSV again, and choose "Import a CSV":
 
 - Rows are matched by the Device, Direction and Port columns, never by their order, so sorting or deleting rows in the spreadsheet is safe. Keep those three columns.
-- Only Location, Connected, Status, Notes and New label are imported. A column left out of the file is left alone.
+- Location, Connected, Status, Notes, New label and Plate are imported. A column left out of the file is left alone.
+- Plate is what is printed on the wall plate. Change it for a plate that does not follow the pattern; put the usual marking back to clear that. An empty cell is left alone, and so is a Plate entered for a port that has no wall plate: whether a port has a plate is set on the page.
 - The page shows every change the file would make and saves nothing until you choose Save.
 - It warns about rows it could not match, a changed Hardware label (put the name you want in New label), and values that look like dates, which is what a spreadsheet does to a name such as `1-2`.
 - Importing an older export puts back what that file held, so export a fresh copy before editing.
@@ -518,7 +537,7 @@ To record one:
 
 | Field | What it holds |
 |---|---|
-| Label on the jack | What is printed on the panel, such as `MV01` |
+| Label on the jack | What is printed on the panel, such as `MON1` |
 | Goes to | Where the jack's fixed cable ends, such as "Wall plate behind the lobby TV" |
 | Patched to | The router input or output it is patched to, or "Open, nothing plugged in" |
 
@@ -671,6 +690,8 @@ node capture.js <router-ip> <switcher-ip>
 ```
 
 The addresses can be left off when `venue.json` already holds them. Opened this way the page behaves like a sandbox on that snapshot.
+
+Recorders, converters, monitors and NDI converters are in the snapshot too: where each one is and which router ports it is on, so the whole-system map is complete. They are not asked for anything when the snapshot is taken, so it has no status for them, and it holds no device addresses.
 
 `venue-snapshot.html` contains your device labels and spaces. It is not tracked by git, and `venue-router.html` itself never holds any venue data: the server puts the current state into the page at the moment it serves it.
 
